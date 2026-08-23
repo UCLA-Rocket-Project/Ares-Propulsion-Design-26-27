@@ -9,14 +9,24 @@ clc; clear; close all;
 % Read Charts
 
 muACorrelation = readmatrix('muACorrelation.csv');
-A = muACorrelation(:, 1); 
+A1 = muACorrelation(:, 1); 
 mu = muACorrelation(:, 2);
-[Araw, idx] = sort(A);
+[Araw, idx] = sort(A1);
 Chart.mu = mu(idx);
-[Chart.A, ia] = unique(Araw);          
-Mu_u = Chart.mu(ia);                 
-Chart.AQ = linspace(min(Chart.A), max(Chart.A), 500);
-Chart.mu = interp1(Chart.A, Mu_u, Chart.AQ, 'pchip');
+[Chart.Amu, ia] = unique(Araw);          
+MuU = Chart.mu(ia);                 
+Chart.AQmu = linspace(min(Chart.Amu), max(Chart.Amu), 500);
+Chart.mu = interp1(Chart.Amu, MuU, Chart.AQmu, 'pchip');
+
+AalphaCorrelation = readmatrix('AalphaCorrelation.csv');
+A2 = AalphaCorrelation(:, 1); 
+alpha = AalphaCorrelation(:, 2);
+[Araw, idx] = sort(A2);
+Chart.alpha = alpha(idx);
+[Chart.Aalpha, ia] = unique(Araw);          
+alphaU = Chart.alpha(ia);                 
+Chart.AQalpha = linspace(min(Chart.Aalpha), max(Chart.Aalpha), 500);
+Chart.alpha = interp1(Chart.Aalpha, alphaU, Chart.AQalpha, 'pchip');
 
 % Design Parameters
 
@@ -43,23 +53,25 @@ Ox.manifoldPressure = Param.Pc + Ox.dP;
 
 % Chosen Parameters
 
-Fuel.sprayConeAngle = 90; % 90-120 deg
-Ox.sprayConeAngle = 60; %60-80 deg
-Fuel.numInPass = 2;
-Ox.numInPass = 2;
+Ox.sprayConeHalfAngle = 40; %30-40 deg
+Fuel.numInPass = 3;
+Ox.numInPass = 3;
 Fuel.inLengthFactor = 3; % 3-6, factor to mult inlet radius for inlet length
 Ox.inLengthFactor = 3; 
 Fuel.nozLengthFactor = 0.5; % 0.5-2 factor to mult nozzle radius for nozzle length
 Ox.nozLengthFactor = 0.5;
 Fuel.chamLengthFactor = 3; % >2 factor to mult inlet radius vortex-chamber length
 Ox.chamLengthFactor = 3;
-Fuel.RIn = 3; % Radial distance from centerline to inlet center ( = 3 for closed, 0.7 <= x <= 0.8 for open)
-Ox.RInFactor = 0.7;
+Fuel.RIn = 3; % Radial distance from centerline to inlet center
+Ox.RInFactor = 3; % May want to iterate to get desired spray angle
 
 % Fluid Properties
 
-%Fuel.rho
-%Ox.rho
+Fuel.temp = 293; % Change depending on regen script
+Ox.temp = 90; % Change depending on predicted LOX temp
+Fuel.viscosity = py.CoolProp.CoolProp.PropsSI('V', 'T', Fuel.temp, 'P', Fuel.manifoldPressure, 'Ethanol');
+Ox.viscosity = py.CoolProp.CoolProp.PropsSI('V', 'T', Ox.temp, 'P', Ox.manifoldPressure, 'Oxygen');
+Ox.rho = py.CoolProp.CoolProp.PropsSI('D', 'T', Ox.temp, 'P', Ox.manifoldPressure, 'Oxygen'); 
 
 % Array Initialization
 Array.AOx = [];
@@ -68,36 +80,37 @@ Array.RnOx = [];
 
 %% Main
 
-stageOneParam(Ox, Chart);
+Ox = stageOneParam(Ox, Chart);
+disp(Ox);
 
 %% Functions
-function stageOneParam(Ox, Chart)
+function Ox = stageOneParam(Ox, Chart)
     
-    Atol = 1;
+    Atol = 10^-10;
     AError = realmax;
-    AGuess = 5;% Geometric Parameter A
+    AGuess = interp1(Chart.alpha, Chart.AQalpha, Ox.sprayConeHalfAngle, 'pchip');
     while (abs(AError) > Atol)
-        Ox.mu = interp1(Chart.AQ, Chart.mu, AGuess, 'pchip'); % Mass flow coefficient
+        Ox.mu = interp1(Chart.AQmu, Chart.mu, AGuess, 'pchip'); % Mass flow coefficient
         Ox.Rn = 0.475 * sqrt(Ox.mdot / (Ox.mu...
             * sqrt(Ox.rho * Ox.dP))); % Nozzle radius (103)
-        Ox.rIn = sqrt((Ox.RIn * Ox.Rn) / (Ox.numInPass * Ox.A)); % Inlet passage radius (104)
+        Ox.Rin = Ox.RInFactor * Ox.Rn; % Radial distance from centerline to inlet center
+        Ox.rIn = sqrt((Ox.Rin * Ox.Rn) / (Ox.numInPass * AGuess)); % Inlet passage radius (104)
         Ox.inletLength = Ox.rIn * Ox.inLengthFactor; % Inlet length
         Ox.nozzleLength = Ox.Rn * Ox.nozLengthFactor; % Nozzle length
-        Ox.chamLength = Ox.rIn * Ox.chamLengthFactor; % Vortex chamber length
+        Ox.chamLength = Ox.Rin * Ox.chamLengthFactor; % Vortex chamber length
     
-        Ox.Rin = Ox.RinFactor * Ox.Rn; % Radial distance from centerline to inlet center
         Ox.Rs = Ox.Rin + Ox.rIn; % Vortex chamber radius
-    
-        Ox.vIn = (Ox.mdot/Ox.numInPass) / (Ox.rho * pi * Ox.rIn^2); % Inlet fluid velocity
-        Ox.ReIn = 0.637 * ((Ox.mdot/Ox.numInPass) / (sqrt(Ox.numInPass) * Ox.rIn...
-            * Ox.rhoOx * Ox.vIn)); % Reynolds in inlet passages
+
+        Ox.ReIn = 0.637 * (Ox.mdot / (sqrt(Ox.numInPass) * Ox.rIn...
+            * Ox.viscosity)); % Reynolds in inlet passages
+
         Ox.lambda = 0.3164 / (Ox.ReIn)^0.25; % Friction factor
 
         Ox.AEq = (Ox.Rin * Ox.Rn) / (Ox.numInPass * Ox.rIn^2 +...
-            Ox.lambda * Ox.Rin * (Ox.Rin - Ox.Rn)); % A corrected for viscous losses (100)
+            Ox.lambda * Ox.Rin * (Ox.Rin - Ox.Rn)*0.5); % A corrected for viscous losses (100)
         Ox.tilt = 90 - atand(Ox.Rs / Ox.inletLength); % Inlet tilting angle
-        Ox.muEq = interp1(Chart.AQ, Chart.mu, Ox.AEq, 'pchip'); % Mass flow coefficient corrected for viscous losses
-        Ox.alphaEq = NaN;% Spray cone angle coefficient corrected for viscous losses
+        Ox.muEq = interp1(Chart.AQmu, Chart.mu, Ox.AEq, 'pchip'); % Mass flow coefficient corrected for viscous losses
+        Ox.alphaEq = interp1(Chart.AQalpha, Chart.alpha, Ox.AEq, 'pchip');% Spray cone angle coefficient corrected for viscous losses
         Ox.xiIn = -(0.4 * Ox.tilt)/60 + 0.9; % Hydrolic-loss coefficient (Fig. 25)
         Ox.xi = Ox.xiIn + Ox.lambda * (Ox.inletLength / (2 * Ox.rIn));
     
@@ -107,9 +120,7 @@ function stageOneParam(Ox, Chart)
             * sqrt(Ox.rho * Ox.dP)));
         Ox.A = (Ox.Rin * Ox.Rn) / (Ox.numInPass * Ox.rIn^2);
 
-        AError = Ox.A - AGuess;
+        AError = AGuess - Ox.A;
         AGuess = Ox.A + 0.1*AError;
     end
-    
 end
-
