@@ -30,7 +30,7 @@ Chart.alpha = interp1(Chart.Aalpha, alphaU, Chart.AQalpha, 'pchip');
 
 % Design Parameters
 
-Param.numElements = 4;
+Param.numElements = 12;
 Param.minFlangeThickness = 0;
 Param.wallThickness = 0;
 
@@ -63,33 +63,38 @@ Ox.rho = py.CoolProp.CoolProp.PropsSI('D', 'T', Ox.temp, 'P', Ox.manifoldPressur
 
 % Chosen Parameters
 
-Ox.sprayConeHalfAngle = 50;
+Ox.sprayConeHalfAngle = 60;
 Fuel.sprayConeHalfAngle = Ox.sprayConeHalfAngle - 7.5;
-Fuel.numInPass = 2;
-Ox.numInPass = 8;
 Fuel.inLengthFactor = 3; % 3-6, factor to mult inlet radius for inlet length
 Ox.inLengthFactor = 3; 
 Fuel.nozLengthFactor = 0.5; % 0.5-2 factor to mult nozzle radius for nozzle length
 Ox.nozLengthFactor = 2;
 Fuel.chamLengthFactor = 2; % >2 factor to mult inlet radius vortex-chamber length
 Ox.chamLengthFactor = 2;
-Fuel.RInFactor = 3; % Radial distance from centerline to inlet center; affects nozzle/chamber length ratio; 3 for closed, 0.7-0.8 for open
-Ox.RInFactor = 0.7;
+
+% Varying Parameters
+Fuel.RInFactor = 1; % Radial distance from centerline to inlet center; affects nozzle/chamber length ratio
+Ox.RInFactor = 1;
+Fuel.numInPass = 1;
+Ox.numInPass = 1;
 
 %% Main
 
 report = 'swirlOutputGeo.txt';
-Ox = stageOneParam(Ox, Chart);
-Fuel = stageOneParam(Fuel, Chart);
-checkReportGeometry(Ox, Fuel, report, Param);
+findValidGeometry(Ox, Fuel, Chart, report, Param);
 
 %% Functions
 function species = stageOneParam(species, Chart)
     
-    Atol = 0.1;
+    Atol = 0.00000000001;
     AError = realmax;
     AGuess = interp1(Chart.alpha, Chart.AQalpha, species.sprayConeHalfAngle, 'pchip');
+    species.isConverged = false;
     while (abs(AError) > Atol)
+        if (~isreal(AGuess))
+            return;
+        end
+        % Prepare guessed geometry
         species.mu = interp1(Chart.AQmu, Chart.mu, AGuess, 'pchip'); % Mass flow coefficient
         species.Rn = 0.475 * sqrt(species.mdot / (species.mu...
             * sqrt(species.rho * species.dP))); % Nozzle radius (103)
@@ -98,14 +103,14 @@ function species = stageOneParam(species, Chart)
         species.inletLength = species.rIn * species.inLengthFactor; % Inlet length
         species.nozzleLength = species.Rn * species.nozLengthFactor; % Nozzle length
         species.chamLength = species.RIn * species.chamLengthFactor; % Vortex chamber length
-    
         species.Rs = species.RIn + species.rIn; % Vortex chamber radius
 
+        % Calculate relevant fluid properties
         species.ReIn = 0.637 * (species.mdot / (sqrt(species.numInPass) * species.rIn...
             * species.viscosity)); % Reynolds in inlet passages
-
         species.lambda = 0.3164 / (species.ReIn)^0.25; % Friction factor
 
+        % Correct geometry for viscous losses
         species.AEq = (species.RIn * species.Rn) / (species.numInPass * species.rIn^2 +...
             species.lambda * species.RIn * (species.RIn - species.Rn)*0.5); % A corrected for viscous losses (100)
         species.tilt = 90 - atand(species.Rs / species.inletLength); % Inlet tilting angle
@@ -113,7 +118,8 @@ function species = stageOneParam(species, Chart)
         species.alphaEq = interp1(Chart.AQalpha, Chart.alpha, species.AEq, 'pchip');% Spray cone angle coefficient corrected for viscous losses
         species.xiIn = -(0.4 * species.tilt)/60 + 0.9; % Hydrolic-loss coefficient (Fig. 25)
         species.xi = species.xiIn + species.lambda * (species.inletLength / (2 * species.rIn));
-    
+
+        % Calculate next guess using corrected geometry
         species.mu = species.muEq / sqrt(1 +...
             species.xi * species.muEq^2 * AGuess^2 / species.RInFactor^2);
         species.Rn = 0.475 * sqrt(species.mdot / (species.mu...
@@ -123,12 +129,13 @@ function species = stageOneParam(species, Chart)
         AError = AGuess - ANextGuess;
         AGuess = ANextGuess;
     end
-
-    species.length = species.nozzleLength + species.chamLength;
+    species.isConverged = true;
 end
 
-function checkReportGeometry(Ox, Fuel, report, Param)
+function reportGeometry(Ox, Fuel, reportWrite, Param, numValid)
     reason = {};
+    Ox.length = Ox.chamLength + Ox.nozzleLength;
+    Fuel.length = Fuel.chamLength + Fuel.nozzleLength;
 
     if (Ox.Rn + Param.wallThickness < Fuel.Rn)
         speciesStageOne = 'Ox';
@@ -155,20 +162,45 @@ function checkReportGeometry(Ox, Fuel, report, Param)
         speciesStageTwo = 'N/A';
     end
 
-    reportWrite = fopen(report, 'w');
-
     if (pass == false)
         for i = 1:numel(reason)
             fprintf(reportWrite, 'NO PASS:\n%s\n' ,reason{i});
         end
         fprintf(reportWrite, '\n');
     end
-    fprintf(reportWrite, 'Stage One: %s\nStage Two: %s\n', speciesStageOne,...
+    fprintf(reportWrite, 'GEOMETRY #%d\nStage One: %s\nStage Two: %s\n', numValid, speciesStageOne,...
         speciesStageTwo);
-    fprintf(reportWrite, '\nOX DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\n', ...
+    fprintf(reportWrite, '\nOX DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\nSpray Cone Angle: %f deg\n', ...
         Ox.Rn, Ox.Rs, Ox.rIn, Ox.tilt, Ox.numInPass, Ox.RIn, ...
-        Ox.inletLength, Ox.nozzleLength, Ox.chamLength, Ox.AEq);
-    fprintf(reportWrite, '\nFUEL DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\n', ...
+        Ox.inletLength, Ox.nozzleLength, Ox.chamLength, Ox.AEq, Ox.alphaEq*2);
+    fprintf(reportWrite, '\nFUEL DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\nSpray Cone Angle: %f deg\n\nEND\n\n', ...
         Fuel.Rn, Fuel.Rs, Fuel.rIn, Fuel.tilt, Fuel.numInPass, Fuel.RIn, ...
-        Fuel.inletLength, Fuel.nozzleLength, Fuel.chamLength, Fuel.AEq);
+        Fuel.inletLength, Fuel.nozzleLength, Fuel.chamLength, Fuel.AEq, Fuel.alphaEq*2);
+end
+
+function findValidGeometry(speciesOne, speciesTwo, Chart, report, Param)
+    numValid = 0;
+    reportWrite = fopen(report, 'w');
+    for i = 0.7: 0.1: 3
+        speciesOne.RInFactor = i;
+        speciesTwo.RInFactor = i;
+        speciesOne = stageOneParam(speciesOne, Chart);
+        speciesTwo = stageOneParam(speciesTwo, Chart);
+        if speciesOne.isConverged && speciesTwo.isConverged && speciesOne.AEq >= 1 && ...
+                speciesOne.AEq <= 13 && speciesTwo.AEq >= 1 && speciesTwo.AEq <= 13
+            for j = 2:1:6
+                speciesOne.numInPass = j;
+                speciesTwo.numInPass = j;
+                speciesOne = stageOneParam(speciesOne, Chart);
+                speciesTwo = stageOneParam(speciesTwo, Chart);
+                if speciesOne.alphaEq > (speciesOne.sprayConeHalfAngle - 2) && ...
+                        speciesOne.alphaEq < (speciesOne.sprayConeHalfAngle + 2) &&...
+                        speciesTwo.alphaEq > (speciesTwo.sprayConeHalfAngle - 2) && ...
+                        speciesTwo.alphaEq < (speciesTwo.sprayConeHalfAngle + 2)
+                    numValid = numValid + 1;
+                    reportGeometry(speciesOne, speciesTwo, reportWrite, Param, numValid);
+                end
+            end
+        end
+    end
 end
