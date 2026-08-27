@@ -1,1 +1,93 @@
+Given all inputs and properties tables set-up:
+Assume ambient temp is 298K, then T_co = T_amb (non cryogenic)
 
+AREA LOOP (channel area optimization)
+Set channel geometry
+
+    PRESSURE LOOP
+    Set P_guess
+
+        AXIAL MARCH
+        FOR dx in no. geometric stations:
+            Calculate flow velocity -> v = mdot / (rho * A)
+            Find Reynolds number based on local rho, v, Dh, mu -> Re = rho * v * Dh / mu
+            Find Prandtl using local Cp, mu, k -> Pr = Cp * mu / k
+            Find Nusselt with Gnielinski
+            Find coolant convection HT coeff -> h_c = Nu * k / Dh
+
+            SC HOT WALL TEMP ITERATION
+            Set T_hw_guess
+            t_hw_converging = False
+            WHILE t_hw_converging = False
+                Find fin efficiency and correct coolant HT coeff for fins
+                Calculate gas convection HT coeff h_g using Bartz and T_hw_guess
+                Solve total resistance circuit for heat transfer rate q
+                Calculate T_hw from gas-wall convection
+                Find error between calculated T_hw and T_hw_guess
+                IF abs(error) > tol
+                    Update T_hw_guess
+                ELSE
+                    t_hw_converging = True
+            END SC HOT WALL TEMP ITERATION
+
+            Calculate T_cw
+            IF coolant is not boiling
+                Proceed to CHF CHECK
+            ELSE
+                Calculate nucleate boiling HT coeff h_nb
+                Calculate new nucleate boiling heat transfer rate q_nb
+                Calculate T_hw
+                Calculate T_cw
+                Calculate new T_hw_guess using the converged subcooled T_hw and the new nucleate boiling T_hw
+
+                NB HOT WALL TEMP ITERATION
+                t_hw_converging = False
+                WHILE t_hw_converging = False
+                    Calculate gas convection HT coeff h_g using Bartz and T_hw_guess
+                    Calculate nucleate-boiling-corrected coolant convection HT coeff
+                    Find fin efficiency and correct coolant HT coeff for fins
+                    Solve total resistance circuit for heat transfer rate q
+                    Calculate new nucleate boiling HT coeff h_nb for next iteration
+                    Find error and update T_hw_guess
+                    IF abs(error) > tol
+                        Continue iteration
+                    ELSE
+                        t_hw_converging = True
+                END SB HOT WALL TEMP ITERATION
+
+            CHF CHECK
+            Calculate wall-coolant heat flux q"
+            Find CHF with HH equations and pressure correction
+            IF q" >= CHF
+                Script fails
+
+            COOLANT UPDATE
+            Calculate next T_co from q = mdot * Cp * DeltaT
+            Calculate pressure loss through station
+                Viscous losses
+                    IF laminar -> f = 64 / Re
+                    IF turbulent -> solve Colebrook equation for f
+                Contraction/Expansion losses
+                    Calculate K for expansion or contraction
+                Momentum losses
+            Update rho with CoolProp
+            Update k with CoolProp
+            Update Cp with CoolProp
+            Update mu with CoolProp
+
+        Exit AXIAL MARCH when all stations are solved
+
+    IF calculated pressure at last station is within tolerance to P_target
+        END PRESSURE LOOP
+    ELSE
+        Calculate new P_guess using secant
+        Repeat PRESSURE LOOP
+
+    STRESS ANALYSIS
+    IF stress analysis passes and pressure can be optimized further
+        Increase channel area
+        Repeat AREA LOOP
+    ELSE
+        Script ends; last run's channel area is final
+
+END AREA LOOP
