@@ -220,6 +220,7 @@ end
 Gas.M_chamber =  flowisentropic(Gas.gamma, Geo.Rc^2/Geo.Rt^2, 'sub');
 Gas.M_ref = [Gas.M_chamber, 1.0, Gas.M_local(end)];
 
+Gas.pressure = Param.Pc * (1 + (Gas.gamma - 1)/2 .* Gas.M_local .^2) .^ (-Gas.gamma / (Gas.gamma - 1));
 Gas.vel_sonic_local = interp1(Gas.M_ref, vel_sonic_ref, Gas.M_local, 'linear', 'extrap');
 Gas.velocity_local = Gas.vel_sonic_local .* Gas.M_local;
 Gas.cp_g_local = interp1(Gas.M_ref, cp_g_ref, Gas.M_local, 'linear', 'extrap');
@@ -227,7 +228,6 @@ Gas.mu_g_local = interp1(Gas.M_ref, mu_g_ref, Gas.M_local, 'linear', 'extrap');
 Gas.k_g_local = interp1(Gas.M_ref, k_g_ref, Gas.M_local, 'linear', 'extrap');
 Gas.prandtl_g_local = interp1(Gas.M_ref, prandtl_ref, Gas.M_local, 'linear', 'extrap');
 Gas.i_stag_local = interp1(Gas.M_ref, i_stag_ref, Gas.M_local, 'linear', 'extrap');
-Gas.i_w = 0;
 
 Gas.Taw = Gas.T_stag * ((1 + Gas.prandtl_g_local.^(1/3).*((Gas.gamma - 1) / 2) .* Gas.M_local.^2) ...
     ./ (1 + ((Gas.gamma - 1) / 2) .* Gas.M_local.^2));
@@ -761,6 +761,7 @@ function Temp = temp_iteration(Param, Geo, Gas, Cool, Mat, Loop, d) % HW Temp It
             sigma;
 
         %Temp.q_eq = Temp.h_g*Loop.A_g_loc*(Loop.Taw_loc - Temp.T_hw_guess);
+        
         Temp.q_eq = Temp.h_i * Loop.A_g_loc * (Gas.i_aw(d) - Gas.i_w);
         Temp.T_cw = Temp.T_hw_guess - (Temp.q_eq)*...
             log(1+2*Geo.wall_thickness/Loop.D_g_loc)/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
