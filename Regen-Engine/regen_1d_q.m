@@ -35,6 +35,21 @@ py.rocketcea.cea_obj.add_new_fuel('ETHANOL_WATER_75_25(L)', card_str);
 fuel = 'ETHANOL_WATER_75_25(L)';
 c = py.rocketcea.cea_obj.CEA_Obj(pyargs('oxName', oxidizer,'fuelName', fuel));
 exp_ratio = c.get_eps_at_PcOvPe(pyargs('Pc', Pc_us, 'MR', o_f, 'PcOvPe',(Pc_us / Pamb)));
+
+% Cantera and read yaml
+
+ct = py.importlib.import_module('cantera');
+Cantera = ct.Solution('nasa9_species.yaml');
+
+Y_fuel_toal = 1/(1+ o_f);
+Y_ox_total = o_f / (1 + o_f);
+
+Y_eth = 0.75 * Y_fuel_toal;
+Y_water = 0.25 * Y_fuel_toal;
+Y_o2 = Y_ox_total;
+
+Y_str = sprintf('C2H5OH: %.8f, H2O: %.8f, O2:%.8f', Y_eth, Y_water, Y_o2);
+
 % transport properties [Cp, mu, k, Prandtl]
 transport_chamber = c.get_Chamber_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 transport_throat = c.get_Throat_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
@@ -485,7 +500,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Loop.Taw_loc = Gas.Taw(d); % Local adiabatic wall temp
         
         %Temp Loops
-        Temp = temp_iteration(Param, Geo, Gas, Cool, Mat, Loop, d);
+        Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d);
         Arrays.T_cw_array(d) = Temp.T_cw;
   
         Arrays.T_hw_array(d) = Temp.T_hw_guess;
@@ -727,7 +742,7 @@ xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility'
 
 %% Thermal Logic
 
-function Temp = temp_iteration(Param, Geo, Gas, Cool, Mat, Loop, d) % HW Temp Iteration
+function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d) % HW Temp Iteration
     Temp.T_hw_guess = 700; % Initial Guess (1.25 FOS applied to material melting point)
     T_hw_prev_guess = 650; % Cooler lower bound (Luca's value)
     tol_q = 0.1; % w
@@ -762,7 +777,8 @@ function Temp = temp_iteration(Param, Geo, Gas, Cool, Mat, Loop, d) % HW Temp It
 
         %Temp.q_eq = Temp.h_g*Loop.A_g_loc*(Loop.Taw_loc - Temp.T_hw_guess);
         
-        Temp.q_eq = Temp.h_i * Loop.A_g_loc * (Gas.i_aw(d) - Gas.i_w);
+        i_w = get_iw(Cantera, Y_str, Gas, Temp);
+        Temp.q_eq = Temp.h_i * Loop.A_g_loc * (Gas.i_aw(d) - i_w);
         Temp.T_cw = Temp.T_hw_guess - (Temp.q_eq)*...
             log(1+2*Geo.wall_thickness/Loop.D_g_loc)/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
 
@@ -800,6 +816,15 @@ function Temp = temp_iteration(Param, Geo, Gas, Cool, Mat, Loop, d) % HW Temp It
             Temp.T_hw_guess = T_next;
         end
     end
+
+    function i_w = get_iw(Cantera,Y_str, Gas, Temp)
+
+    Cantera.TPY = py.tuple({Temp.T_hw_guess, Gas.pressure(d), Y_str});
+    Cantera.equilibrate('TP');
+    i_w = double(Cantera.enthalpy_mass);
+
+    end
+
 end
 
 %% Stresses
@@ -842,3 +867,6 @@ function stressAnalysis(Geo, Loop, Mat, Param, d)
         (Stress.sigma_h_tot - Stress.sigma_b)^2 +...
         (Stress.sigma_b - Stress.sigma_a)^2) + 3*Stress.sigma_s_tot^2);
 end
+
+
+
