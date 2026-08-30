@@ -60,13 +60,12 @@ cp_g_ref = [double(transport_chamber{1}), double(transport_throat{1}), double(tr
 mu_g_ref = [double(transport_chamber{2}), double(transport_throat{2}), double(transport_exit{2})] .* 0.0001; % Pa*s viscosity
 k_g_ref = [double(transport_chamber{3}), double(transport_throat{3}), double(transport_exit{3})] .* 0.4184; % W/m*K thermal conductivity
 prandtl_ref = [double(transport_chamber{4}), double(transport_throat{4}), double(transport_exit{4})];
-Param.cp_g = cp_g_ref(1); Param.mu_g = mu_g_ref(1); Param.k_g = k_g_ref(1); Param.prandtl = prandtl_ref(1);
 i_stag_ref = [double(i_stag{1}), double(i_stag{2}), double(i_stag{3})] .* 2326; % J/kg specific enthalpy
 vel_sonic_ref = [double(vel_sonic{1}), double(vel_sonic{2}), double(vel_sonic{3})] .* 0.3048; % m/s local speed of sound
 
 
-gamma_chamber = c.get_Chamber_MolWt_gamma(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
-Gas.gamma = double(gamma_chamber{2}); % specific heat ratio, constant for isentropic relations
+gamma_throat = c.get_Throat_MolWt_gamma(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
+Gas.gamma = double(gamma_throat{2}); % specific heat ratio, constant for isentropic relations
 
 temps_cea = c.get_Temperatures(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio)); % Mat.r
 Gas.T_stag = double(temps_cea{1}) * 5/9 * cstar_eff^2; % K, Chamber (adiabatic Wall -> constant stagnation temp)
@@ -399,10 +398,8 @@ Arrays.T_bulk_array = zeros(size(Geo.pos_i));
 Arrays.P_array = zeros(size(Geo.pos_i));
 Arrays.P_loss_array = zeros(size(Geo.pos_i));
 Arrays.q_flux_array = zeros(size(Geo.pos_i));
-Arrays.h_i_array = zeros(size(Geo.pos_i));
+Arrays.h_g_array = zeros(size(Geo.pos_i));
 Arrays.h_c_array = zeros(size(Geo.pos_i));
-Arrays.h_c_f_array = zeros(size(Geo.pos_i));
-Arrays.h_nb_array = zeros(size(Geo.pos_i));
 Arrays.CHF_array = zeros(size(Geo.pos_i));
 Arrays.stress_array = zeros(size(Geo.pos_i));
 Arrays.q_eq_array = zeros(size(Geo.pos_i));
@@ -411,12 +408,13 @@ Arrays.q_eq_array = zeros(size(Geo.pos_i));
 Arrays.f_array = zeros(size(Geo.pos_i));
 Arrays.Nu_array = zeros(size(Geo.pos_i));
 Arrays.T_sat_array = zeros(size(Geo.pos_i));
+Arrays.h_c_f_array = zeros(size(Geo.pos_i));
 Arrays.Re_array = zeros(size(Geo.pos_i));
 Arrays.vel_c_array = zeros(size(Geo.pos_i));
 Arrays.fin_eff_array = zeros(size(Geo.pos_i));
 Arrays.q_error_array = zeros(size(Geo.pos_i));
 Arrays.iter_T_array = zeros(size(Geo.pos_i));
-Arrays.sigma_array = zeros(size(Geo.pos_i));
+
 
 %% Main Loop
 Loop.P_guess = convpres(500, 'psi', 'Pa');
@@ -504,13 +502,12 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
   
         Arrays.T_hw_array(d) = Temp.T_hw_guess;
         Arrays.fin_eff_array(d) = Temp.fin_eff;
-        Arrays.h_i_array(d) = Temp.h_i;
+        Arrays.h_g_array(d) = Temp.h_g;
         Arrays.q_error_array(d) = Temp.q_error;
         Arrays.iter_T_array(d) = Temp.iter_T;
         Arrays.q_eq_array(d) = Temp.q_eq;
-        Arrays.h_c_f_array(d) = Temp.h_c_f;
-        Arrays.h_nb_array(d) = Temp.h_nb;
-        Arrays.sigma_array(d) = Temp.sigma;
+        Arrays.h_c_f_array = Temp.
+
         
         % Check CHF
         Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
@@ -633,7 +630,7 @@ hold off;
 % HTC
 figure('Name', 'GasHTC', 'Color', 'w');
 hold on; grid on;
-plot(Geo.pos_i, Arrays.h_i_array, 'r', 'LineWidth', 2);
+plot(Geo.pos_i, Arrays.h_g_array, 'r', 'LineWidth', 2);
 title('Gas Heat Transfer Coefficient')
 xlabel('Axial Position x (m)');
 ylabel('Heat Transfer Coefficient (W/m^2*K)');
@@ -645,8 +642,6 @@ figure('Name', 'CoolantHTC', 'Color', 'w');
 hold on; grid on;
 plot(Geo.pos_i, Arrays.h_c_array, 'b', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.h_c_f_array, 'g', 'LineWidth', 2);
-plot(Geo.pos_i, Arrays.h_nb_array, 'r', 'LineWidth', 2);
-legend('Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling')
 title('Coolant Heat Transfer Coefficient')
 xlabel('Axial Position x (m)');
 ylabel('Heat Transfer Coefficient (W/m^2*K)');
@@ -736,15 +731,6 @@ xlabel('Axial Position x (m)');
 ylabel('Number of Iterations');
 xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
 
-% Sigma
-figure('Name', 'Sigma', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.sigma_array, 'k', 'LineWidth', 2);
-title('Sigma')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
 %}
 
 
@@ -765,7 +751,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+Geo.w_rib); % Fin corrected Loop.h_c
 
         % Gas convection HTC with Bartz
-        Temp.sigma = 1 / ...
+        sigma = 1 / ...
             ((0.5 * (Temp.T_hw_guess/Gas.T_stag) * (1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2) + 0.5)^0.68 *...
             (1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2)^0.12);
         
@@ -773,14 +759,15 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
             ((Gas.mu_g_local(d)^0.2*Gas.cp_g_local(d))/Gas.prandtl_g_local(d)^0.6)*...
             (Param.Pc/Param.cstar_act)^0.8)*...
             (Geo.D_t/Geo.R_curve)^0.1*...
-            (Geo.At/Gas.A_local(d))^0.9;
-
+            (Geo.At/Gas.A_local(d))^0.9*...
+            sigma;
+        
         Temp.h_i = ((0.026/Geo.D_t^0.2)*...
             (Gas.mu_g_local(d)^0.2/Gas.prandtl_g_local(d)^0.6)*...
             (Param.Pc/Param.cstar_act)^0.8)*...
             (Geo.D_t/Geo.R_curve)^0.1*...
             (Geo.At/Gas.A_local(d))^0.9*...
-            Temp.sigma;
+            sigma;
 
         %Temp.q_eq = Temp.h_g*Loop.A_g_loc*(Loop.Taw_loc - Temp.T_hw_guess);
         
@@ -792,13 +779,13 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         % coolant side shares the convection term in both regimes so q_c is continuous at t_cw = t_sat
         q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
         if Temp.T_cw > Loop.T_sat
-            Temp.h_nb = 0.00122*...
+            h_nb = 0.00122*...
                 (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
                 ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
                 ((Temp.T_cw-Loop.T_sat)^0.24)*...
                 (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
             S = 1/(1+(2.53*(10^-6))*(Loop.Re^1.17));
-            q_c = q_c + S*Temp.h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
+            q_c = q_c + S*h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
         end
 
         % Secant
