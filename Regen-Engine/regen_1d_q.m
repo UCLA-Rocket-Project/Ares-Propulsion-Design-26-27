@@ -16,6 +16,10 @@ mfrac_eth = 0.75;
 mfrac_h2o = 1 - mfrac_eth;
 mw_eth = 46.068; % g/mol
 mw_h2o = 18.015; % g/mol
+x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); % Mole fraction
+x_h2o = 1 - x_eth;
+P_crit = [6140000, 22064000]; % ethanol, water
+Param.P_crit_mix = x_eth * P_crit(1) + x_h2o * P_crit(2); % fuel mixture
 oxidizer = 'LOX';
 % Assumed efficiencies
 cstar_eff = 0.90;
@@ -74,7 +78,7 @@ Gas.T_stag = double(temps_cea{1}) * 5/9 * cstar_eff^2; % K, Chamber (adiabatic W
 cstar_theo = double(c.get_Cstar(pyargs('Pc', Pc_us, 'MR', o_f))) * 0.3048; % m/s
 cf_cea = c.get_PambCf(pyargs('Pamb', Pamb, 'Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 cf_theo = double(cf_cea{1});
-MW = 23.446; % g/mol
+Param.MW = 23.446; % g/mol
 
 exit_pres_ratio = c.get_PcOvPe(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 Gas.P_exit = convpres(Pc_us/exit_pres_ratio, 'psi', 'Pa');
@@ -84,9 +88,9 @@ fuel_stiffness = 0.20; % standard
 dP_inj = fuel_stiffness * Param.Pc; % Pa
 mdot_total = F / (cstar_theo * cstar_eff * cf_theo * cf_eff); % kg/s
 Param.cstar_act = cstar_theo .* cstar_eff; % m/s
-mdot_f = mdot_total ./ (1 + o_f); % kg/s
+Param.mdot_f = mdot_total ./ (1 + o_f); % kg/s
 rho_f_inj = 789 * mfrac_eth + 1000 * mfrac_h2o; % kg/m^3 (20C)
-CdA_f_inj = mdot_f / sqrt(2 * rho_f_inj * dP_inj); % m^2 (Heritage)
+CdA_f_inj = Param.mdot_f / sqrt(2 * rho_f_inj * dP_inj); % m^2 (Heritage)
 P_target = Param.Pc + dP_inj; % Pa manifold pressure (target value)
 
 %% Throat Geometry (Rao)
@@ -274,8 +278,6 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
     P_vec = linspace(P_min, P_max, res);
     T_vec = linspace(T_min, T_max, res);
 
-    x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); % Mole fraction
-    x_h2o = 1 - x_eth;
     A12_vl = 1.6798; A21_vl = 0.9227; % Van Laar coeffs
     % Activity coefficients from Van Laar equation: deviation of a mixture of chemical substances from ideal behaviour
     gam_eth = exp(A12_vl*(A21_vl*x_h2o/(A12_vl*x_eth + A21_vl*x_h2o))^2); 
@@ -428,17 +430,19 @@ Loop.iter_P = 0;
 while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
     Loop.iter_P = Loop.iter_P + 1;
     Loop.P_loc = Loop.P_guess;
+    Loop.P_reduced = Loop.P_loc / Param.P_crit_mix;
     Loop.T_bulk = T_amb;
 
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
         Loop.cw = Geo.w_channel(d);
         Loop.ch = Geo.h_channel;
+        Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
         Loop.A_g_loc = Geo.A_gas(d);
         Loop.A_w_loc = Geo.A_w(d);
         Loop.A_base_loc = pi * Geo.D_channel_base(d) * Geo.dl(d);
         Loop.D_g_loc = Geo.D_gas(d);
-        Loop.D_h_loc = (2*Loop.cw*Loop.ch)/(Loop.cw+Loop.ch);
+        Loop.D_h_loc = (2*Loop.cw*Loop.ch)/(Loop.cw+Loop.ch); % hydraulic diameter
         Loop.A_c_cs = Loop.cw*Loop.ch; % Cross sectional area of channel
         Loop.A_c_cs_tot = Loop.A_c_cs * Geo.num_channel;
         if (d ~= 1) % If not Geo.At final chamber station
@@ -460,8 +464,11 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Loop.rho_c_v = Cool.get_rho_v(Loop.P_loc);
         Loop.surften = Cool.get_surften(Loop.P_loc);
         Loop.h_fg = Cool.get_h_fg(Loop.P_loc);
+
+        Loop.quality = max(0,(Loop.cp_c * (Loop.T_bulk - Loop.T_sat)) / Loop.h_fg); % capped at 0 for Elfaham
+        Loop.prandtl_c = Loop.mu_c * Loop.cp_c / Loop.k_c;
        
-        Loop.vel_c = mdot_f / (Loop.A_c_cs_tot * Loop.rho_c);
+        Loop.vel_c = Param.mdot_f / (Loop.A_c_cs_tot * Loop.rho_c);
         Loop.Re = (Loop.rho_c * Loop.D_h_loc * Loop.vel_c) / Loop.mu_c;
         Arrays.Re_array(d) = Loop.Re;
         Arrays.vel_c_array(d) = Loop.vel_c;
@@ -513,7 +520,6 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Arrays.sigma_array(d) = Temp.sigma;
         
         % Check CHF
-        Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
         q_flux = Temp.q_eq/Loop.A_conv;
         Arrays.q_flux_array(d) = q_flux;
         dT_sub = Loop.T_sat - Loop.T_bulk; % K, bulk subcooling
@@ -524,7 +530,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
 
         % Prepare for next station
         Arrays.T_bulk_array(d) = Loop.T_bulk; % Store the updated bulk temperature
-        Loop.T_bulk = Loop.T_bulk + Temp.q_eq/(mdot_f*Loop.cp_c); % K
+        Loop.T_bulk = Loop.T_bulk + Temp.q_eq/(Param.mdot_f*Loop.cp_c); % K
 
         % Calculate pressure losses 
         P_loss_viscous = (Loop.f_calc*Loop.rho_c*Loop.vel_c^2*Geo.dl(d))/(2*Loop.D_h_loc);
@@ -544,7 +550,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
             P_loss_area = 0;
         end
 
-        P_loss_mom = mdot_f^2*... % Assume den diff is negligible, unless can find a way to get next station den 
+        P_loss_mom = Param.mdot_f^2*... % Assume den diff is negligible, unless can find a way to get next station den 
             (2/(Loop.A_c_cs*Geo.num_channel+Loop.A_c_cs_next*Geo.num_channel))*...
             (1/(Loop.rho_c*Loop.A_c_cs*Geo.num_channel) - 1/(Loop.rho_c*Loop.A_c_cs_next*Geo.num_channel));
 
@@ -790,6 +796,53 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
             log(1+2*Geo.wall_thickness/Loop.D_g_loc)/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
 
         % coolant side shares the convection term in both regimes so q_c is continuous at t_cw = t_sat
+        mass_flux = Param.mdot_f / Loop.A_conv;
+        dT_sub = Loop.T_sat - Loop.T_bulk;
+        dT_bulk = Temp.T_cw - Loop.T_bulk;
+        dT_sat = Temp.T_cw - Loop.T_sat;
+        Stanton = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.cp_c * dT_sub); % dimensionless
+        Peclet = mass_flux * Loop.D_h_loc * Loop.cp_c / Loop.k_c;
+        Boiling = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.h_fg);
+
+        % Elfaham Correlation
+        
+        % Find Ms correction term
+        if 1e-10 <= Boiling && Boiling < 1e-3 % actual lower bound 1e-5, change to this if Boiling within appropriate range
+            Ms = 0.7;
+        elseif 1e-3 <= Boiling && Boiling < 5e-3
+            Ms = 1.5;
+        elseif 5e-3 <= Boiling && Boiling < 1e-2
+            Ms = 1.3;
+        else
+            Ms = 1.1;
+        end
+        q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        Temp.h_nb = 0;
+        if Temp.T_cw > Loop.T_sat
+            Temp.h_nb = 55 * (abs(Temp.q_eq/Loop.A_base_loc))^0.67 * Loop.P_reduced^0.12 * (-log10(Loop.P_reduced))^(-0.55) * Param.MW^(-0.5);
+            E = (1 + Loop.quality*Loop.prandtl_c*(Loop.rho_c_l/Loop.rho_c_v - 1))^0.35;
+            S = Ms / (1 + 0.055 * E^0.1 * Loop.Re^0.16);
+            Temp.h_tp = sqrt((S*Temp.h_nb)^2 + (E*Temp.h_c_f)^2);
+            q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        end
+
+        % Zhu-Bi-Yan Correlation        
+        % if Stanton <= 38*Peclet^(-0.38) % partially boiling
+        %     Temp.h_nb = 0.00122*...
+        %         (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
+        %         ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
+        %         ((dT_sat)^0.24)*...
+        %         (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
+        %     S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
+        %     Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
+        %     q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        % else % fully developed boiling
+        %     q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * e^(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
+        % end
+        
+
+        % Chen Correlation
+        %{
         q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
         if Temp.T_cw > Loop.T_sat
             Temp.h_nb = 0.00122*...
@@ -800,6 +853,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
             S = 1/(1+(2.53*(10^-6))*(Loop.Re^1.17));
             q_c = q_c + S*Temp.h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
         end
+        %}
 
         % Secant
         Temp.q_error = Temp.q_eq - q_c;

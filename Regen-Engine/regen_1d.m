@@ -16,6 +16,10 @@ mfrac_eth = 0.75;
 mfrac_h2o = 1 - mfrac_eth;
 mw_eth = 46.068; % g/mol
 mw_h2o = 18.015; % g/mol
+Param.x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); % Mole fractions
+Param.x_h2o = 1 - Param.x_eth;
+Param.P_crit = [6140000, 22064000]; % ethanol, water
+Param.P_crit_mix = Param.x_eth * Param.P_crit(1) + Param.x_h2o * Param.P_crit(2); % fuel mixture
 oxidizer = 'LOX';
 % Assumed efficiencies
 cstar_eff = 0.90;
@@ -248,12 +252,10 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
     P_vec = linspace(P_min, P_max, res);
     T_vec = linspace(T_min, T_max, res);
 
-    x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); % Mole fraction
-    x_h2o = 1 - x_eth;
     A12_vl = 1.6798; A21_vl = 0.9227; % Van Laar coeffs
     % Activity coefficients from Van Laar equation: deviation of a mixture of chemical substances from ideal behaviour
-    gam_eth = exp(A12_vl*(A21_vl*x_h2o/(A12_vl*x_eth + A21_vl*x_h2o))^2); 
-    gam_h2o = exp(A21_vl*(A12_vl*x_eth/(A12_vl*x_eth + A21_vl*x_h2o))^2);
+    gam_eth = exp(A12_vl*(A21_vl*Param.x_h2o/(A12_vl*Param.x_eth + A21_vl*Param.x_h2o))^2); 
+    gam_h2o = exp(A21_vl*(A12_vl*Param.x_eth/(A12_vl*Param.x_eth + A21_vl*Param.x_h2o))^2);
 
     % use ndgrid for higher dimensionality use
     [P_grid, T_grid] = ndgrid(P_vec, T_vec);
@@ -281,8 +283,8 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
             T_sat_hi = min(T_sat_h2o, 513.5); % Capped at ethanol critical temperature
             for t = 1:40
                 T_sat_mid = 0.5*(T_sat_lo + T_sat_hi);
-                P_bubble = x_eth*gam_eth*py.CoolProp.CoolProp.PropsSI('P','T',T_sat_mid,'Q',0,'ethanol') + ...
-                    x_h2o*gam_h2o*py.CoolProp.CoolProp.PropsSI('P','T',T_sat_mid,'Q',0,'water');
+                P_bubble = Param.x_eth*gam_eth*py.CoolProp.CoolProp.PropsSI('P','T',T_sat_mid,'Q',0,'ethanol') + ...
+                    Param.x_h2o*gam_h2o*py.CoolProp.CoolProp.PropsSI('P','T',T_sat_mid,'Q',0,'water');
                 if P_bubble < P_val
                     T_sat_lo = T_sat_mid;
                 else
@@ -334,7 +336,7 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
             cp_grid(i,j) = mfrac_eth * cp_eth + mfrac_h2o * cp_h2o;
             % Grunberg-Nissan relation for viscosity of fluid mixture
             G12 = 840 / T_val;
-            mu_grid(i,j) = exp(x_eth*log(mu_eth) + x_h2o*log(mu_h2o) + x_eth*x_h2o*G12);
+            mu_grid(i,j) = exp(Param.x_eth*log(mu_eth) + Param.x_h2o*log(mu_h2o) + Param.x_eth*Param.x_h2o*G12);
             k_grid(i,j) = mfrac_eth * k_eth + mfrac_h2o * k_h2o;
         end
     end
@@ -402,6 +404,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
     Loop.iter_P = Loop.iter_P + 1;
     Loop.P_loc = Loop.P_guess;
     Loop.T_bulk = T_amb;
+    Loop.P_reduced = Loop.P_loc / Param.P_crit_mix;
 
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
