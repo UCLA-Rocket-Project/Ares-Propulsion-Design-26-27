@@ -79,6 +79,7 @@ cstar_theo = double(c.get_Cstar(pyargs('Pc', Pc_us, 'MR', o_f))) * 0.3048; % m/s
 cf_cea = c.get_PambCf(pyargs('Pamb', Pamb, 'Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 cf_theo = double(cf_cea{1});
 Param.MW = 23.446; % g/mol
+Param.MW_coolant = x_eth*mw_eth + x_h2o*mw_h2o; % g/mol, coolant blend
 
 exit_pres_ratio = c.get_PcOvPe(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 Gas.P_exit = convpres(Pc_us/exit_pres_ratio, 'psi', 'Pa');
@@ -804,56 +805,52 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         Peclet = mass_flux * Loop.D_h_loc * Loop.cp_c / Loop.k_c;
         Boiling = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.h_fg);
 
-        % Elfaham Correlation
-        
-        % Find Ms correction term
-        if 1e-10 <= Boiling && Boiling < 1e-3 % actual lower bound 1e-5, change to this if Boiling within appropriate range
-            Ms = 0.7;
-        elseif 1e-3 <= Boiling && Boiling < 5e-3
-            Ms = 1.5;
-        elseif 5e-3 <= Boiling && Boiling < 1e-2
-            Ms = 1.3;
-        else
-            Ms = 1.1;
-        end
-        q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        Temp.h_nb = 0;
-        if Temp.T_cw > Loop.T_sat
-            Temp.h_nb = 55 * (abs(Temp.q_eq/Loop.A_base_loc))^0.67 * Loop.P_reduced^0.12 * (-log10(Loop.P_reduced))^(-0.55) * Param.MW^(-0.5);
-            E = (1 + Loop.quality*Loop.prandtl_c*(Loop.rho_c_l/Loop.rho_c_v - 1))^0.35;
-            S = Ms / (1 + 0.055 * E^0.1 * Loop.Re^0.16);
-            Temp.h_tp = sqrt((S*Temp.h_nb)^2 + (E*Temp.h_c_f)^2);
-            q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        end
-
         % Zhu-Bi-Yan Correlation        
-        % if Stanton <= 38*Peclet^(-0.38) % partially boiling
-        %     Temp.h_nb = 0.00122*...
-        %         (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
-        %         ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
-        %         ((dT_sat)^0.24)*...
-        %         (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
-        %     S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
-        %     Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
-        %     q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        % else % fully developed boiling
-        %     q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * e^(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
-        % end
-        
-
-        % Chen Correlation
-        %{
-        q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        if Temp.T_cw > Loop.T_sat
+        if Stanton <= 38*Peclet^(-0.38) % partially boiling
             Temp.h_nb = 0.00122*...
                 (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
                 ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
-                ((Temp.T_cw-Loop.T_sat)^0.24)*...
+                ((dT_sat)^0.24)*...
                 (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
-            S = 1/(1+(2.53*(10^-6))*(Loop.Re^1.17));
-            q_c = q_c + S*Temp.h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
+            S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
+            Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
+            q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        else % fully developed boiling
+            q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * e^(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
         end
-        %}
+
+        % Elfaham Correlation
+        % Find Ms correction term
+        % if 1e-10 <= Boiling && Boiling < 1e-3 % actual lower bound 1e-5, change to this if Boiling within appropriate range
+        %     Ms = 0.7;
+        % elseif 1e-3 <= Boiling && Boiling < 5e-3
+        %     Ms = 1.5;
+        % elseif 5e-3 <= Boiling && Boiling < 1e-2
+        %     Ms = 1.3;
+        % else
+        %     Ms = 1.1;
+        % end
+        % q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        % Temp.h_nb = 0;
+        % if Temp.T_cw > Loop.T_sat
+        %     Temp.h_nb = 55 * (abs(Temp.q_eq/Loop.A_base_loc))^0.67 * Loop.P_reduced^0.12 * (-log10(Loop.P_reduced))^(-0.55) * Param.MW_coolant^(-0.5);
+        %     E = (1 + Loop.quality*Loop.prandtl_c*(Loop.rho_c_l/Loop.rho_c_v - 1))^0.35;
+        %     S = Ms / (1 + 0.055 * E^0.1 * Loop.Re^0.16);
+        %     Temp.h_tp = sqrt((S*Temp.h_nb)^2 + (E*Temp.h_c_f)^2);
+        %     q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        % end
+        
+        % Chen Correlation
+        % q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        % if Temp.T_cw > Loop.T_sat
+        %     Temp.h_nb = 0.00122*...
+        %         (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
+        %         ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
+        %         ((Temp.T_cw-Loop.T_sat)^0.24)*...
+        %         (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
+        %     S = 1/(1+(2.53*(10^-6))*(Loop.Re^1.17));
+        %     q_c = q_c + S*Temp.h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
+        % end
 
         % Secant
         Temp.q_error = Temp.q_eq - q_c;
