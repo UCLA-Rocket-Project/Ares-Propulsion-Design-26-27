@@ -27,7 +27,7 @@ cf_eff = 0.98;
 
 % CEA parameters where Pamb = 9.94 psia (interpolate for diff values across nozzle after)
 % Taken from throat (A/Geo.At = 1.00)
-o_f = 1.4;
+o_f = 1.3;
 Pc_us = 370; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
@@ -179,9 +179,9 @@ Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 Geo.min_tol = 0.001; % m 3d printer tolerance
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
-Geo.h_channel = Geo.min_tol*5.5; % channel height (radial)
+Geo.h_channel = Geo.min_tol*5; % channel height (radial)
 Geo.coat_thickness = 0.0002;
-Geo.wall_thickness = Geo.min_tol*2; % HW/Loop.cw
+Geo.wall_thickness = Geo.min_tol; % HW/Loop.cw
 Geo.out_wall_thickness = 0.01;
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 Geo.D_channel_base = Geo.D_gas + 2 * Geo.wall_thickness; % Engine diameters with added wall thickness
@@ -387,22 +387,63 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
     save(table_filename,'Cool','P_vec', 'T_vec', 'table_version');
 end
 
-%% Material Properties (316 Stainless)
-T_mp = 1643.15; % K
+%% Material Properties
+Mat.r = 1e-4;
+
+% 316 stainless
+%T_mp = 1643.15; % K
 % Wall thermal conductivity k_w = f(T)
-Mat.k_w_ref_temps = [-0.15, 19.85, 26.85, 76.85, 126.85, 226.85, 326.85, 426.85, 526.85, 626.85, ...
-    726.85, 826.85, 926.85, 1026.9, 1126.9, 1226.9, 1326.9, 1370.9, 1398.9, 1426.9] + 273.15; % K
-Mat.k_w_ref = [12.97, 13.31, 13.44, 14.32, 15.16, 16.8, 18.36, 19.87, 21.39, 22.79, 24.06, 25.46, 26.74, ...
-    28.02, 29.32, 30.61, 31.86, 32.41, 26.9, 27.24];
-Mat.r = 1e-4; % m, surface roughness
-Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200] + 273.15;
-Mat.E_ref = [1.95*10^11 1.91*10^11 1.86*10^11 1.8*10^11 1.73*10^11 ...
-    1.64*10^11 1.55*10^11 1.44*10^11 1.31*10^11 1.17*10^11 1*10^11 ...
-    8.1*10^10 5.1*10^10]; 
-Mat.nu_ref = [0.25 0.26 0.275 0.315 0.33 0.3 0.32 0.31 0.24 0.24 0.24 0.24 0.24];
-Mat.alpha_ref_temps = [100 200 300 400 600 800 1000 1200 1500] + 273.15;
-Mat.alpha_ref = [9.2 12.6 14.9 16.6 19.8 22.6 25.4 28.0 31.7] .* 10^-6;
-%get_k_w = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, T_w_local, 'linear'); % callout
+%Mat.k_w_ref_temps = [-0.15, 19.85, 26.85, 76.85, 126.85, 226.85, 326.85, 426.85, 526.85, 626.85, ...
+    %726.85, 826.85, 926.85, 1026.9, 1126.9, 1226.9, 1326.9, 1370.9, 1398.9, 1426.9] + 273.15; % K
+%Mat.k_w_ref = [12.97, 13.31, 13.44, 14.32, 15.16, 16.8, 18.36, 19.87, 21.39, 22.79, 24.06, 25.46, 26.74, ...
+    %28.02, 29.32, 30.61, 31.86, 32.41, 26.9, 27.24];
+%Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200] + 273.15;
+%Mat.E_ref = [1.95*10^11 1.91*10^11 1.86*10^11 1.8*10^11 1.73*10^11 ...
+    %1.64*10^11 1.55*10^11 1.44*10^11 1.31*10^11 1.17*10^11 1*10^11 ...
+    %8.1*10^10 5.1*10^10]; 
+%Mat.nu_ref = [0.25 0.26 0.275 0.315 0.33 0.3 0.32 0.31 0.24 0.24 0.24 0.24 0.24];
+%Mat.alpha_ref_temps = [100 200 300 400 600 800 1000 1200 1500] + 273.15;
+%Mat.alpha_ref = [9.2 12.6 14.9 16.6 19.8 22.6 25.4 28.0 31.7] .* 10^-6;
+
+% 17-4PH stainless
+
+%Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
+%Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
+%Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
+%Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
+%Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
+%Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
+%Mat.alpha_ref = [1.04 1.04 1.10 1.14 1.18 1.20 1.20] .* 10^-5;
+
+% 625 Inconel
+
+%Mat.k_w_ref_temps = [-18 21 38 93 204 316 427 538 649 760 871 982] + 273.15;
+%Mat.k_w_ref = [9.2 9.8 10.1 10.8 12.5 14.1 15.7 17.5 19 20.8 22.8 25.2];
+%Mat.ref_temps = [24 538 816 982 1093] + 273.15;
+%Mat.E_ref = [16.2 12.4 5.7 3.8 2.1] .* 10^10;
+%Mat.nu_ref = [0.278 0.305 0.33 0.33 0.33];
+%Mat.alpha_ref_temps = [93 204 316 427 538 649 760 871 927] + 273.15;
+%Mat.alpha_ref = [1.28 1.31 1.33 1.37 1.4 1.48 1.53 1.58 1.62] .* 10^-5;
+
+% 718 Inconel
+
+%Mat.k_w_ref_temps = [22 233 448 657 866 1079 1289 1500] + 273.15;
+%Mat.k_w_ref = [11.9 13.7 16.9 21.7 25.6 22.9 19.1 17.7];
+%Mat.ref_temps = [21 537 815 982 1093] + 273.15;
+%Mat.E_ref = [16.5 15.2 11 5.5 3.4] .* 10^10;
+%Mat.nu_ref = [0.3 0.28 0.323 0.368 0.4];
+%Mat.alpha_ref_temps = [427 538 649 871 1093 1827] + 273.15;
+%Mat.alpha_ref = [1.436 1.49 1.543 1.745 1.834 1.834] .* 10*-5;
+
+% Ti-6Al-4V
+
+Mat.k_w_ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1650 1700 1800 1900 1950] + 273.15;
+Mat.k_w_ref = [8.11 7.74 7.52 7.55 7.81 8.29 8.96 9.81 10.82 11.98 13.26 14.65 16.13 17.69 19.29 20.93 22.6 28.53 29.45 31.28 33.11 34.02];
+Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
+Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
+Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
+Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
+Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
 
 Mat.k_Al2O3_ref_temps = [300 400 500 600 700 800 900 1000 1100 1200 1300 ...
     1400 1500 1600];
@@ -623,7 +664,7 @@ plot(Geo.pos_i, Arrays.T_tc_array, 'm', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.T_hw_array, 'r', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.T_cw_array, 'b', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.T_bulk_array, 'c', 'LineWidth', 2);
-plot(Geo.pos_i, Arrays.T_fin_array, 'm', 'LineWidth', 2);
+plot(Geo.pos_i, Arrays.T_fin_array, 'y', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.T_ow_array, 'k', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.T_sat_array, 'g', 'LineWidth', 2);
 legend('Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Colder Wall', 'Coldest Wall');
@@ -799,7 +840,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
 
         % Gas convection HTC with Bartz
         Temp.sigma = 1 / ...
-            ((0.5 * (1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2) + 0.5)^0.68 *...
+            ((0.5 * (Temp.T_tc_guess/Gas.T_stag)*(1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2) + 0.5)^0.68 *...
             (1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2)^0.12);
         
         Temp.h_g = ((0.026/Geo.D_t^0.2)*...
@@ -847,18 +888,21 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         Peclet = mass_flux * Loop.D_h_loc * Loop.cp_c / Loop.k_c;
         Boiling = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.h_fg);
 
-        % Zhu-Bi-Yan Correlation        
-        if Stanton <= 38*Peclet^(-0.38) % partially boiling
-            Temp.h_nb = 0.00122*...
-                (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
-                ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
-                ((dT_sat)^0.24)*...
-                (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
-            S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
-            Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
-            q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        else % fully developed boiling
-            q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * exp(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
+        % Zhu-Bi-Yan Correlation
+        q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+        if (Temp.T_cw >= Loop.T_sat)
+            if Stanton <= 38*Peclet^(-0.38) % partially boiling
+                Temp.h_nb = 0.00122*...
+                    (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
+                    ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
+                    ((dT_sat)^0.24)*...
+                    (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
+                S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
+                Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
+                q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
+            else % fully developed boiling
+                q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * exp(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
+            end
         end
 
         % Elfaham Correlation
@@ -1000,7 +1044,3 @@ function Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp)
         (Stress.sigma_h_tot - Stress.sigma_b)^2 +...
         (Stress.sigma_b - Stress.sigma_a)^2) + 3*Stress.sigma_s_tot^2);
 end
-
-
-
-
