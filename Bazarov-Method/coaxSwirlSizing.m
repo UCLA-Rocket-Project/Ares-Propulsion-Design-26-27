@@ -6,7 +6,22 @@ clc; clear; close all;
 
 %% Setup
 
-% Read Charts
+% Read for 2D Interpolations
+
+angleRbarA1 = readmatrix('2alphaRbarA1.csv');
+angleRbarA2 = readmatrix('2alphaRbarA2.csv');
+angleRbarA3 = readmatrix('2alphaRbarA3.csv');
+angleRbarA4 = readmatrix('2alphaRbarA4.csv');
+Chart.angleRbarA = {angleRbarA1, angleRbarA2, angleRbarA3, angleRbarA4};
+
+muRbarA1 = readmatrix('muRbarA1.csv');
+muRbarA2 = readmatrix('muRbarA2.csv');
+muRbarA3 = readmatrix('muRbarA3.csv');
+muRbarA4 = readmatrix('muRbarA4.csv');
+muRbarA6 = readmatrix('muRbarA6.csv');
+Chart.muRbarA = {muRbarA1, muRbarA2, muRbarA3, muRbarA4, muRbarA6};
+
+% Read for 1D Interpolations
 
 muACorrelation = readmatrix('muACorrelation.csv');
 A1 = muACorrelation(:, 1); 
@@ -30,9 +45,9 @@ Chart.alpha = interp1(Chart.Aalpha, alphaU, Chart.AQalpha, 'pchip');
 
 % Design Parameters
 
-Param.numElements = 12;
-Param.minFlangeThickness = 0;
-Param.wallThickness = 0;
+Param.numElements = 9;
+Param.minFlangeThickness = 0.01;
+Param.wallThickness = 0.0005;
 
     % Imperial
 Param.PcUS = 370; % Psia
@@ -54,7 +69,7 @@ Ox.manifoldPressure = Param.Pc + Ox.dP;
 
 % Fluid Properties
 
-Fuel.temp = 293; % Change depending on regen script
+Fuel.temp = 400; % Change depending on regen script
 Ox.temp = 90; % Change depending on predicted LOX temp
 Fuel.viscosity = py.CoolProp.CoolProp.PropsSI('V', 'T', Fuel.temp, 'P', Fuel.manifoldPressure, 'Ethanol');
 Ox.viscosity = py.CoolProp.CoolProp.PropsSI('V', 'T', Ox.temp, 'P', Ox.manifoldPressure, 'Oxygen');
@@ -63,20 +78,14 @@ Ox.rho = py.CoolProp.CoolProp.PropsSI('D', 'T', Ox.temp, 'P', Ox.manifoldPressur
 
 % Chosen Parameters
 
-Ox.sprayConeHalfAngle = 60;
-Fuel.sprayConeHalfAngle = Ox.sprayConeHalfAngle - 7.5;
 Fuel.inLengthFactor = 3; % 3-6, factor to mult inlet radius for inlet length
 Ox.inLengthFactor = 3; 
 Fuel.nozLengthFactor = 0.5; % 0.5-2 factor to mult nozzle radius for nozzle length
 Ox.nozLengthFactor = 2;
 Fuel.chamLengthFactor = 2; % >2 factor to mult inlet radius vortex-chamber length
-Ox.chamLengthFactor = 2;
-
-% Varying Parameters
-Fuel.RInFactor = 1; % Radial distance from centerline to inlet center; affects nozzle/chamber length ratio
-Ox.RInFactor = 1;
-Fuel.numInPass = 1;
-Ox.numInPass = 1;
+Ox.chamLengthFactor = 6;
+Ox.sprayConeHalfAngle = 50;
+Fuel.sprayConeHalfAngle = Ox.sprayConeHalfAngle - 7.5;
 
 %% Main
 
@@ -86,7 +95,7 @@ findValidGeometry(Ox, Fuel, Chart, report, Param);
 %% Functions
 function species = stageOneParam(species, Chart)
     
-    Atol = 0.00000000001;
+    Atol = 0.001;
     AError = realmax;
     AGuess = interp1(Chart.alpha, Chart.AQalpha, species.sprayConeHalfAngle, 'pchip');
     species.isConverged = false;
@@ -129,7 +138,46 @@ function species = stageOneParam(species, Chart)
         AError = AGuess - ANextGuess;
         AGuess = ANextGuess;
     end
-    species.isConverged = true;
+    if ~isnan(species.Rn)
+        species.isConverged = true;
+    end
+end
+
+function species = stageTwoParam(species, speciesOne, Chart, Param)
+    species.isConverged = false;
+
+    if (~isreal(speciesOne.Rn) || isnan(speciesOne.Rn))
+        return;
+    end
+    oneExR = speciesOne.Rn + Param.wallThickness;
+
+    nozzleSpacingGuess = 0.0003;
+    stepSize = 0.000005;
+    tol = 6000; % Pa
+    dPError = realmax;
+
+    while (abs(dPError) > tol || isnan(species.A) || isnan(species.mu)) && nozzleSpacingGuess < 0.01
+        nozzleSpacingGuess = nozzleSpacingGuess + stepSize;
+        species.Rn = oneExR + nozzleSpacingGuess;
+        species.RBar = species.Rn/oneExR;
+        species.A = thirtySevenInterpA(Chart, species.RBar, species.sprayConeHalfAngle); % Fig. 37, alpha must be < 50, > 10
+        species.mu = thirtyEightInterp(Chart, species.RBar, species.A);
+        dP = 0.05*((species.mdot^2)/(species.mu^2 * species.rho * species.Rn^4));
+        dPError = dP - species.dP;
+    end
+    
+    if (nozzleSpacingGuess ~= 0.01)
+        species.isConverged = true;
+    end
+
+    species.RIn = species.RInFactor * species.Rn;
+    species.rIn = sqrt((species.RIn * species.Rn) / (species.numInPass * species.A));
+    species.alphaCalc = thirtySevenInterpAlpha(Chart, species.RBar, species.A);
+    species.inletLength = species.rIn * species.inLengthFactor; % Inlet length
+    species.nozzleLength = species.Rn * species.nozLengthFactor;
+    species.chamLength = species.RIn * species.chamLengthFactor;
+    species.Rs = species.RIn + species.rIn;
+    species.tilt = 90 - atand(species.Rs / species.inletLength);
 end
 
 function reportGeometry(Ox, Fuel, reportWrite, Param, numValid)
@@ -162,12 +210,20 @@ function reportGeometry(Ox, Fuel, reportWrite, Param, numValid)
         speciesStageTwo = 'N/A';
     end
 
+    if (Fuel.Rs < Ox.Rs)
+        pass = false;
+        reason = [reason, {'Chamber Violation'}];
+    end
+
     if (pass == false)
         for i = 1:numel(reason)
             fprintf(reportWrite, 'NO PASS:\n%s\n' ,reason{i});
         end
         fprintf(reportWrite, '\n');
+    else
+        fprintf(reportWrite, 'YES PASS\n\n');
     end
+    
     fprintf(reportWrite, 'GEOMETRY #%d\nStage One: %s\nStage Two: %s\n', numValid, speciesStageOne,...
         speciesStageTwo);
     fprintf(reportWrite, '\nOX DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\nSpray Cone Angle: %f deg\n', ...
@@ -175,32 +231,120 @@ function reportGeometry(Ox, Fuel, reportWrite, Param, numValid)
         Ox.inletLength, Ox.nozzleLength, Ox.chamLength, Ox.AEq, Ox.alphaEq*2);
     fprintf(reportWrite, '\nFUEL DIMENSIONS\nNozzle Radius: %f m\nChamber Radius: %f m\nInlet Radius: %f m\nInlet Tilt: %f deg\nNumber of Inlet Passes: %f\nInlet Position: %f m\nInlet Length: %f m\nNozzle Length: %f m\nChamber Length: %f m\nA Parameter: %f\nSpray Cone Angle: %f deg\n\nEND\n\n', ...
         Fuel.Rn, Fuel.Rs, Fuel.rIn, Fuel.tilt, Fuel.numInPass, Fuel.RIn, ...
-        Fuel.inletLength, Fuel.nozzleLength, Fuel.chamLength, Fuel.AEq, Fuel.alphaEq*2);
+        Fuel.inletLength, Fuel.nozzleLength, Fuel.chamLength, Fuel.A, Fuel.alphaCalc*2);
+    disp(numValid);
 end
 
 function findValidGeometry(speciesOne, speciesTwo, Chart, report, Param)
     numValid = 0;
     reportWrite = fopen(report, 'w');
-    for i = 0.7: 0.1: 3
-        speciesOne.RInFactor = i;
-        speciesTwo.RInFactor = i;
-        speciesOne = stageOneParam(speciesOne, Chart);
-        speciesTwo = stageOneParam(speciesTwo, Chart);
-        if speciesOne.isConverged && speciesTwo.isConverged && speciesOne.AEq >= 1 && ...
-                speciesOne.AEq <= 13 && speciesTwo.AEq >= 1 && speciesTwo.AEq <= 13
+    %for (angle = 45:60)
+        %speciesOne.sprayConeHalfAngle = angle;
+        %speciesTwo.sprayConeHalfAngle = speciesOne.sprayConeHalfAngle - 7.5;
+        for i = 0.7: 0.1: 3 % Sweep through stage one geometries
             for j = 2:1:6
                 speciesOne.numInPass = j;
-                speciesTwo.numInPass = j;
+                speciesOne.RInFactor = i;
                 speciesOne = stageOneParam(speciesOne, Chart);
-                speciesTwo = stageOneParam(speciesTwo, Chart);
-                if speciesOne.alphaEq > (speciesOne.sprayConeHalfAngle - 2) && ...
-                        speciesOne.alphaEq < (speciesOne.sprayConeHalfAngle + 2) &&...
-                        speciesTwo.alphaEq > (speciesTwo.sprayConeHalfAngle - 2) && ...
-                        speciesTwo.alphaEq < (speciesTwo.sprayConeHalfAngle + 2)
-                    numValid = numValid + 1;
-                    reportGeometry(speciesOne, speciesTwo, reportWrite, Param, numValid);
+                if speciesOne.alphaEq > (speciesOne.sprayConeHalfAngle - 0.5) && ...
+                        speciesOne.alphaEq < (speciesOne.sprayConeHalfAngle + 0.5) &&...
+                        speciesOne.isConverged && speciesOne.AEq >= 1 && ...
+                        speciesOne.AEq <= 13
+
+                    for i2 = 0.7: 0.1 :3 % Sweep through stage two geometries only on valid stage one geometries
+                        for j2 = 2:1:6
+                            speciesTwo.numInPass = j2;
+                            speciesTwo.RInFactor = i2;
+                            speciesTwo = stageTwoParam(speciesTwo, speciesOne, Chart, Param);
+
+                            if speciesTwo.isConverged && speciesTwo.A >= 1 && speciesTwo.A <= 13
+                                numValid = numValid + 1;
+                                disp(numValid);
+                                reportGeometry(speciesOne, speciesTwo, reportWrite, Param, numValid);
+                            end
+                        end
+                    end
                 end
             end
         end
+    %end
+end
+
+% 2D Interpolations
+
+function A = thirtySevenInterpA(Chart, RbarQuery, alpha)
+    targetAngle = 2*alpha;
+
+    AValues = [];
+    anglesAtRbar = [];
+
+    for i = 1:4 % Get each of the 4 angles corresponding with Rbar at each curve
+        currentCurve = Chart.angleRbarA{i};
+        Rbar = currentCurve(:, 1);
+        if RbarQuery < min(Rbar) || RbarQuery > max(Rbar) % Check if RbarQuery is outside range
+            continue
+        end
+        angle = currentCurve(:, 2);
+        anglesAtRbar(end + 1) =  interp1(Rbar, angle, RbarQuery, 'linear');
+        AValues(end + 1) = i;
     end
+
+    if numel(anglesAtRbar) < 2 % Check if there are curves to interpolate
+        A = NaN;
+        return;
+    end
+
+    A = interp1(anglesAtRbar, AValues, targetAngle, 'linear');
+end
+
+function alpha = thirtySevenInterpAlpha(Chart, RbarQuery, AQuery)
+    AValues = [];
+    anglesAtRbar = [];
+
+    for i = 1:4 % Get each of the 4 angles corresponding with Rbar at each curve
+        currentCurve = Chart.angleRbarA{i};
+        Rbar = currentCurve(:, 1);
+        if RbarQuery < min(Rbar) || RbarQuery > max(Rbar) % Check if RbarQuery is outside range
+            continue
+        end
+        angle = currentCurve(:, 2);
+        anglesAtRbar(end + 1) =  interp1(Rbar, angle, RbarQuery, 'linear');
+        AValues(end + 1) = i;
+    end
+
+    if numel(anglesAtRbar) < 2 % Check if there are curves to interpolate
+        alpha = NaN;
+        return;
+    end
+
+    alpha = (interp1(AValues, anglesAtRbar, AQuery, 'linear'))/2;
+end
+
+function mu = thirtyEightInterp(Chart, RbarQuery, AQuery)
+
+    AValues = [];
+    muAtRbar = [];
+
+    for i = 1:5 
+        currentCurve = Chart.muRbarA{i};
+        Rbar = currentCurve(:, 1);
+        if RbarQuery < min(Rbar) || RbarQuery > max(Rbar) 
+            continue
+        end
+        mu = currentCurve(:, 2);
+        muAtRbar(end + 1) =  interp1(Rbar, mu, RbarQuery, 'linear');
+
+        if (i == 5)
+            AValues(end + 1) = 6;
+        else
+            AValues(end + 1) = i;
+        end
+    end
+
+    if numel(muAtRbar) < 2 
+        mu = NaN;
+        return;
+    end
+
+    mu = interp1(AValues, muAtRbar, AQuery, 'linear');
 end
