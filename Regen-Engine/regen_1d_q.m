@@ -9,8 +9,8 @@ set(groot, 'defaultTextColor', 'k');
 
 %% Basic Parameters
 
-F = 1450 * 4.44822; % Target thrust in N
-Pamb = 12.3; % psia Geo.At 10,500 ft altitude
+F = 1465 * 4.44822; % Target thrust in N
+Pamb = 12.3; % psia
 Param.T_amb = 298; % K (from feed calc sheet)
 mfrac_eth = 0.75;
 mfrac_h2o = 1 - mfrac_eth;
@@ -28,7 +28,7 @@ cf_eff = 0.98;
 % CEA parameters where Pamb = 9.94 psia (interpolate for diff values across nozzle after)
 % Taken from throat (A/Geo.At = 1.00)
 o_f = 1.3;
-Pc_us = 370; % psia, target
+Pc_us = 375; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
     'h,cal=-66370.0      t(k)=298.00      wt%%=75.00\n', ...
@@ -176,19 +176,19 @@ Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 
 %% Cooling Channel and Outer Jacket Geometry
 % Fixed channel height and wall thickness
-Geo.min_tol = 0.001; % m 3d printer tolerance
+Geo.min_tol = 0.001; % m 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
-Geo.h_channel = Geo.min_tol*5; % channel height (radial)
+Geo.h_channel = Geo.min_tol*6; % channel height (radial)
 Geo.coat_thickness = 0.0002;
-Geo.wall_thickness = Geo.min_tol; % HW/Loop.cw
-Geo.out_wall_thickness = 0.01;
+Geo.wall_thickness = Geo.min_tol*1; % HW/Loop.cw
+Geo.out_wall_thickness = 0.005;
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 Geo.D_channel_base = Geo.D_gas + 2 * Geo.wall_thickness; % Engine diameters with added wall thickness
 Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness; % Throat diameter with added wall thickness
 % Number of channels determined Geo.At throat
 Geo.circ_t_base = pi * (Geo.D_t_base); % Gas side diameter + wall thickness
-Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol));
+Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol/2));
 % Local circumferences across engine
 Geo.circ_local_base = pi * Geo.D_channel_base;
 Geo.w_channel = (Geo.circ_local_base - (Geo.num_channel * Geo.w_rib)) ./ Geo.num_channel; % variable, channel widths
@@ -215,6 +215,10 @@ r_outer_jacket = r_channel_base + Geo.h_channel;
 plot(Geo.pos_i, r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacket');
 plot(Geo.pos_i, -r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
 
+r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+plot(Geo.pos_i, r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
+plot(Geo.pos_i, -r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
+
 title('Regen 1D Profile')
 xlabel('Axial Position x (m)');
 ylabel('Radial Position y (m)');
@@ -223,6 +227,19 @@ xline(0, 'r--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility'
 exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
 hold off;
 
+%% Build txt Files
+
+zero_array = zeros(length(Geo.pos_i), 1);
+
+hot_wall = [zero_array, Geo.pos_j', Geo.pos_i'];
+channel_base = [zero_array, r_channel_base', Geo.pos_i'];
+outer_jacket = [zero_array, r_outer_jacket', Geo.pos_i'];
+outer_wall = [zero_array, r_outer_wall', Geo.pos_i'];
+
+writematrix(channel_base, 'channel_base.txt');
+writematrix(outer_jacket, 'outer_jacket.txt');
+writematrix(outer_wall, 'outer_wall.txt');
+writematrix(hot_wall, 'hot_wall.txt');
 
 %% Gas Properties
 % 1D interpolation from 3 CEA points for Cp, Gas.gamma, k, mu for Bartz
@@ -407,13 +424,13 @@ Mat.r = 1e-4;
 
 % 17-4PH stainless
 
-%Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
-%Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
-%Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
-%Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
-%Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
-%Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
-%Mat.alpha_ref = [1.04 1.04 1.10 1.14 1.18 1.20 1.20] .* 10^-5;
+Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
+Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
+Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
+Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
+Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
+Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
+Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
 
 % 625 Inconel
 
@@ -437,13 +454,13 @@ Mat.r = 1e-4;
 
 % Ti-6Al-4V
 
-Mat.k_w_ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1650 1700 1800 1900 1950] + 273.15;
-Mat.k_w_ref = [8.11 7.74 7.52 7.55 7.81 8.29 8.96 9.81 10.82 11.98 13.26 14.65 16.13 17.69 19.29 20.93 22.6 28.53 29.45 31.28 33.11 34.02];
-Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
-Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
-Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
-Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
-Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
+%Mat.k_w_ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1650 1700 1800 1900 1950] + 273.15;
+%Mat.k_w_ref = [8.11 7.74 7.52 7.55 7.81 8.29 8.96 9.81 10.82 11.98 13.26 14.65 16.13 17.69 19.29 20.93 22.6 28.53 29.45 31.28 33.11 34.02];
+%Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
+%Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
+%Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
+%Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
+%Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
 
 Mat.k_Al2O3_ref_temps = [300 400 500 600 700 800 900 1000 1100 1200 1300 ...
     1400 1500 1600];
