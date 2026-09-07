@@ -110,7 +110,7 @@ Geo.theta_n = deg2rad(23); % deg
 
 %% Chamber and Converging Geometry
 Geo.conv_angle = deg2rad(45); % deg, standard
-Geo.L_star = 40; % in, optimal for ethanol/lox
+Geo.L_star = 35; % in, optimal for ethanol/lox
 Geo.CR = 5; % A_c / A_t
 %Geo.id_chanber = 4.75; % in, heritage
 Geo.V_total = convlength(Geo.L_star, 'in', 'm') * Geo.At; % m^3
@@ -143,6 +143,7 @@ Geo.x_exit = Geo.len_div;
 Geo.pos_i = Geo.x_chamber_start:Geo.dx:Geo.x_exit; % axial position
 Geo.pos_j = zeros(size(Geo.pos_i)); % radii
 Geo.pos_throat = floor((Geo.len_chamber + Geo.len_conv)/Geo.dx);
+Geo.pos_conv = floor((Geo.len_chamber)/Geo.dx);
 % Diverging arc
 Geo.xn = (0.382 * Geo.Rt) * sin(Geo.theta_n); % diverging tangent point where parabola starts (Geo.theta_n)
 Geo.Rn = Geo.Rt + (0.382 * Geo.Rt) * (1 - cos(Geo.theta_n)); % y coordinate of Geo.xn
@@ -179,19 +180,40 @@ Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 Geo.min_tol = 0.001; % m 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
-Geo.h_channel = Geo.min_tol*6; % channel height (radial)
+
+Geo.h_channel_chamber_forward = Geo.min_tol*8;
+Geo.h_channel_chamber_aft = Geo.min_tol*3;
+Geo.h_channel_throat = Geo.min_tol*1;
+Geo.h_channel_nozzle = Geo.min_tol*8;
+
 Geo.coat_thickness = 0.0002;
-Geo.wall_thickness = Geo.min_tol*1; % HW/Loop.cw
+Geo.wall_thickness = Geo.min_tol*2; % HW/Loop.cw
 Geo.out_wall_thickness = 0.005;
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 Geo.D_channel_base = Geo.D_gas + 2 * Geo.wall_thickness; % Engine diameters with added wall thickness
+Geo.D_channel_base_throat = Geo.D_channel_base(Geo.pos_throat);
+Geo.D_channel_base_chamber = Geo.D_channel_base(1);
+Geo.D_channel_base_nozzle = Geo.D_channel_base(length(Geo.pos_i));
 Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness; % Throat diameter with added wall thickness
 % Number of channels determined Geo.At throat
 Geo.circ_t_base = pi * (Geo.D_t_base); % Gas side diameter + wall thickness
-Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol/2));
+Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol));
 % Local circumferences across engine
 Geo.circ_local_base = pi * Geo.D_channel_base;
 Geo.w_channel = (Geo.circ_local_base - (Geo.num_channel * Geo.w_rib)) ./ Geo.num_channel; % variable, channel widths
+
+for i = 1:1:length(Geo.pos_i)
+    if (i <= Geo.pos_conv)
+        Geo.h_channel(i) = -((Geo.h_channel_chamber_forward - Geo.h_channel_chamber_aft)/Geo.pos_conv)*(i-1)+Geo.h_channel_chamber_forward;
+    elseif (i > Geo.pos_conv && i <= Geo.pos_throat)
+        Geo.h_channel(i) = ((Geo.h_channel_chamber_aft - Geo.h_channel_throat)/(Geo.D_channel_base_chamber - Geo.D_channel_base_throat))*...
+            (Geo.D_channel_base(i) - Geo.D_channel_base_chamber) + Geo.h_channel_chamber_aft;
+    else
+        Geo.h_channel(i) = ((Geo.h_channel_throat - Geo.h_channel_nozzle)/(Geo.D_channel_base_throat - Geo.D_channel_base_nozzle))*...
+            (Geo.D_channel_base(i) - Geo.D_channel_base_throat) + Geo.h_channel_throat;
+    end
+end
+
 Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
 Geo.Per_heated = Geo.w_channel + 2 * Geo.h_channel; % heated perimeter
 
@@ -514,7 +536,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
         Loop.cw = Geo.w_channel(d);
-        Loop.ch = Geo.h_channel;
+        Loop.ch = Geo.h_channel(d);
         Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
         Loop.A_g_loc = Geo.A_gas(d);
         Loop.A_w_loc = Geo.A_w(d);
@@ -608,6 +630,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         F_p = 1.17-8.56*(10^(-4))*convpres(Loop.P_loc, 'Pa', 'psi');
         CHF_base = 0.1003+0.05264*sqrt(convvel(Loop.vel_c, 'm/s', 'ft/s')*(dT_sub * 9/5)); 
         Arrays.CHF_array(d) = CHF_base*F_p*1635000;
+        Arrays.CHF_array_safe(d) = Arrays.CHF_array(d)*0.9;
         Arrays.T_sat_array(d) = Loop.T_sat;
 
         % Prepare for next station
@@ -709,6 +732,7 @@ figure('Name', 'HeatFlux', 'Color', 'w');
 hold on; grid on;
 plot(Geo.pos_i, Arrays.q_flux_array, 'r', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.CHF_array, 'k--', 'LineWidth', 1.5, 'DisplayName', 'CHF Limit');
+plot(Geo.pos_i, Arrays.CHF_array_safe, 'b--', 'LineWidth', 1.5, 'DisplayName', 'CHF Limit 20%');
 title('Coolant Heat Flux')
 xlabel('Axial Position x (m)');
 ylabel('Heat Flux (W/m^2)');
