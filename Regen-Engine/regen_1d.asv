@@ -1,23 +1,16 @@
 % Test script for 1d regen engine
 
 clc; clear; close all;
-set(groot, 'defaultFigureColor', 'w');
-set(groot, 'defaultAxesColor', 'w');
-set(groot, 'defaultAxesXColor', 'k');
-set(groot, 'defaultAxesYColor', 'k');
-set(groot, 'defaultTextColor', 'k');
+set(groot, 'defaultFigureColor', 'w', 'defaultAxesColor', 'w', ...
+    'defaultAxesXColor', 'k', 'defaultAxesYColor', 'k', 'defaultTextColor', 'k');
 
 %% Basic Parameters
-
 F = 1465 * 4.44822; % Target thrust in N
 Pamb = 12.3; % psia
 Param.T_amb = 298; % K (from feed calc sheet)
-mfrac_eth = 0.75;
-mfrac_h2o = 1 - mfrac_eth;
-mw_eth = 46.068; % g/mol
-mw_h2o = 18.015; % g/mol
-x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); % Mole fraction
-x_h2o = 1 - x_eth;
+mfrac_eth = 0.75; mfrac_h2o = 1 - mfrac_eth; % fuel ratio
+mw_eth = 46.068; mw_h2o = 18.015; % g/mol
+x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); x_h2o = 1 - x_eth; % Mole fraction
 P_crit = [6140000, 22064000]; % ethanol, water
 Param.P_crit_mix = x_eth * P_crit(1) + x_h2o * P_crit(2); % fuel mixture
 oxidizer = 'LOX';
@@ -25,8 +18,7 @@ oxidizer = 'LOX';
 cstar_eff = 0.90;
 cf_eff = 0.98;
 
-% CEA parameters where Pamb = 9.94 psia (interpolate for diff values across nozzle after)
-% Taken from throat (A/Geo.At = 1.00)
+% CEA parameters
 o_f = 1.3;
 Pc_us = 375; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
@@ -41,17 +33,13 @@ c = py.rocketcea.cea_obj.CEA_Obj(pyargs('oxName', oxidizer,'fuelName', fuel));
 exp_ratio = c.get_eps_at_PcOvPe(pyargs('Pc', Pc_us, 'MR', o_f, 'PcOvPe',(Pc_us / Pamb)));
 
 % Cantera and read yaml
-
 ct = py.importlib.import_module('cantera');
 Cantera = ct.Solution('nasa9_species.yaml');
-
 Y_fuel_toal = 1/(1+ o_f);
 Y_ox_total = o_f / (1 + o_f);
-
 Y_eth = 0.75 * Y_fuel_toal;
 Y_water = 0.25 * Y_fuel_toal;
 Y_o2 = Y_ox_total;
-
 Y_str = sprintf('C2H5OH: %.8f, H2O: %.8f, O2:%.8f', Y_eth, Y_water, Y_o2);
 
 % transport properties [Cp, mu, k, Prandtl]
@@ -60,6 +48,7 @@ transport_throat = c.get_Throat_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', 
 transport_exit = c.get_Exit_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 i_stag = c.get_Enthalpies(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 vel_sonic = c.get_SonicVelocities(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
+
 cp_g_ref = [double(transport_chamber{1}), double(transport_throat{1}), double(transport_exit{1})] .* 4184; % J/kg*K
 mu_g_ref = [double(transport_chamber{2}), double(transport_throat{2}), double(transport_exit{2})] .* 0.0001; % Pa*s viscosity
 k_g_ref = [double(transport_chamber{3}), double(transport_throat{3}), double(transport_exit{3})] .* 0.4184; % W/m*K thermal conductivity
@@ -99,22 +88,17 @@ Geo.Rt = sqrt(Geo.At/pi); % m
 Geo.R_curve = 1.5 * Geo.Rt;
 
 %% Diverging Geometry
-%Me = sqrt((2/(Gas.gamma-1))*((Pc_us/Pamb)^((Gas.gamma - 1)/Gas.gamma) - 1));
-%Geo.Ae = Geo.At * (1/Me)*((2/(Gas.gamma + 1))*(1 + ((Gas.gamma - 1)/2) * Me^2))^((Gas.gamma + 1)/(2*(Gas.gamma - 1)));
 Geo.Ae = Geo.At * exp_ratio; % m^2
 Geo.R_exit = sqrt(Geo.Ae/pi); % m
 Geo.percent_len = 0.8; % input (0.8 is optimal fractional length for most cases)
 Geo.len_div = Geo.percent_len * ((Geo.R_exit - Geo.Rt)/tan(deg2rad(15))); % m diverging length from radii
-Geo.theta_e = deg2rad(13); % deg, from HH fig 4.16
-Geo.theta_n = deg2rad(23); % deg
+Geo.theta_e = deg2rad(13); Geo.theta_n = deg2rad(23); % deg, from HH fig 4.16
 
 %% Chamber and Converging Geometry
 Geo.conv_angle = deg2rad(45); % deg, standard
-Geo.L_star = 35; % in, optimal for ethanol/lox
+Geo.L_star = 40; % in, optimal for ethanol/lox
 Geo.CR = 5; % A_c / A_t
-%Geo.id_chanber = 4.75; % in, heritage
 Geo.V_total = convlength(Geo.L_star, 'in', 'm') * Geo.At; % m^3
-%Geo.Rc = convlength(Geo.id_chanber / 2, 'in', 'm'); % m, chamber radius
 Geo.Rc = Geo.Rt * sqrt(Geo.CR);
 Geo.x_conv_tangent = -(Geo.R_curve) * sin(Geo.conv_angle);
 Geo.y_conv_tangent = Geo.Rt + (Geo.R_curve) * (1 - cos(Geo.conv_angle));
@@ -134,9 +118,7 @@ Geo.len_total = Geo.len_chamber + Geo.len_conv + Geo.len_div; % m
 
 %% Encoding Geometry
 Geo.dx = 0.001; % 1 mm step size
-
-% Recentering coordinates to around throat
-Geo.x_t = 0;
+Geo.x_t = 0; % Recentering coordinates to around throat
 Geo.x_chamber_start = -(Geo.len_chamber + Geo.len_conv);
 Geo.x_exit = Geo.len_div;
 % Position arrrays
@@ -155,69 +137,77 @@ Geo.coeffs = Geo.matrix_A \ Geo.matrix_B;
 Geo.a_Rao = Geo.coeffs(1); b_Rao = Geo.coeffs(2); c_Rao = Geo.coeffs(3);
 
 % Encoder loop
-for k = 1:length(Geo.pos_i)
-    x = Geo.pos_i(k);
-    if x < Geo.x_chamber_end % chamber
-        Geo.pos_j(k) = Geo.Rc;
-    elseif x >= Geo.x_chamber_end && x < Geo.x_f_tangent
-        Geo.pos_j(k) = Geo.y_conv_fillet + sqrt(Geo.R_fillet^2 - (x - Geo.x_conv_fillet)^2);
-    elseif x >= Geo.x_f_tangent && x < Geo.x_conv_tangent % straight converging cone
-        Geo.pos_j(k) = Geo.y_f_tangent - tan(Geo.conv_angle) * (x - Geo.x_f_tangent);
-    elseif x >= Geo.x_conv_tangent && x < 0 % converging throat arc
-        Geo.pos_j(k) = (Geo.Rt + Geo.R_curve) - sqrt((Geo.R_curve)^2 - x^2); % Geo.Rt + arc length - height of curve Geo.At point
-    elseif x >= 0 && x < Geo.xn % diverging throat arc
-        Geo.pos_j(k) = (Geo.Rt + 0.382*Geo.Rt) - sqrt((0.382*Geo.Rt)^2 - x^2);
-    else % Rao parabola approx
-        Geo.pos_j(k) = Geo.a_Rao * x^2 + b_Rao * x + c_Rao;
-    end
-end
+x = Geo.pos_i;
+m1 = x < Geo.x_chamber_end;
+m2 = x >= Geo.x_chamber_end & x < Geo.x_f_tangent;
+m3 = x >= Geo.x_f_tangent & x < Geo.x_conv_tangent;
+m4 = x >= Geo.x_conv_tangent & x < 0;
+m5 = x >= 0 & x < Geo.xn;
+m6 = x >= Geo.xn;
+Geo.pos_j(m1) = Geo.Rc;
+Geo.pos_j(m2) = Geo.y_conv_fillet + sqrt(Geo.R_fillet^2 - (x(m2) - Geo.x_conv_fillet).^2);
+Geo.pos_j(m3) = Geo.y_f_tangent - tan(Geo.conv_angle) .* (x(m3) - Geo.x_f_tangent);
+Geo.pos_j(m4) = (Geo.Rt + Geo.R_curve) - sqrt((Geo.R_curve)^2 - x(m4).^2);
+Geo.pos_j(m5) = (Geo.Rt + 0.382*Geo.Rt) - sqrt((0.382*Geo.Rt)^2 - x(m5).^2);
+Geo.pos_j(m6) = Geo.a_Rao .* x(m6).^2 + b_Rao .* x(m6) + c_Rao;
+
 % Slant Length
 Geo.dx_slope = gradient(Geo.pos_j, Geo.dx);
 Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 
 %% Cooling Channel and Outer Jacket Geometry
-% Fixed channel height and wall thickness
 Geo.min_tol = 0.001; % m 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
+Geo.coat_thickness = 0.0002; % m, Thermal Coating Thickness
+Geo.out_wall_thickness = 0.005; % m, Outer Jacket
+Geo.w_rib = Geo.min_tol; % fixed, rib width
 
+% Variable Channel Height
 Geo.h_channel_chamber_forward = Geo.min_tol*8;
-Geo.h_channel_chamber_aft = Geo.min_tol*3;
+Geo.h_channel_chamber_aft = Geo.min_tol*8;
 Geo.h_channel_throat = Geo.min_tol*1;
 Geo.h_channel_nozzle = Geo.min_tol*8;
+% Variable Inner Wall Thickness
+Geo.wall_thickness_forward = Geo.min_tol*3;
+Geo.wall_thickness_aft = Geo.min_tol*3;
+Geo.wall_thickness_throat = Geo.min_tol*2;
+Geo.wall_thickness_nozzle = Geo.min_tol*1;
 
-Geo.coat_thickness = 0.0002;
-Geo.wall_thickness = Geo.min_tol*2; % HW/Loop.cw
-Geo.out_wall_thickness = 0.005;
-Geo.w_rib = Geo.min_tol; % fixed, rib width
+m_conv = 1:Geo.pos_conv;
+m_throat = (Geo.pos_conv + 1):Geo.pos_throat;
+m_div = (Geo.pos_throat + 1):length(Geo.pos_i);
+% Interpolate Wall Thickness
+Geo.wall_thickness = zeros(size(Geo.pos_i));
+Geo.wall_thickness(m_conv) = -((Geo.wall_thickness_forward - Geo.wall_thickness_aft)/Geo.pos_conv).*(m_conv-1) + Geo.wall_thickness_forward;
+Geo.wall_thickness(m_thr)  = ((Geo.wall_thickness_aft - Geo.wall_thickness_throat)/(Geo.D_gas(Geo.pos_conv) - Geo.D_gas(Geo.pos_throat))) .* ...
+    (Geo.D_gas(m_thr) - Geo.D_gas(Geo.pos_conv)) + Geo.wall_thickness_aft;
+Geo.wall_thickness(m_noz)  = ((Geo.wall_thickness_nozzle - Geo.wall_thickness_throat)/(Geo.D_gas(end) - Geo.D_gas(Geo.pos_throat))) .* ...
+    (Geo.D_gas(m_noz) - Geo.D_gas(Geo.pos_throat)) + Geo.wall_thickness_throat;
+
 Geo.D_channel_base = Geo.D_gas + 2 * Geo.wall_thickness; % Engine diameters with added wall thickness
 Geo.D_channel_base_throat = Geo.D_channel_base(Geo.pos_throat);
 Geo.D_channel_base_chamber = Geo.D_channel_base(1);
 Geo.D_channel_base_nozzle = Geo.D_channel_base(length(Geo.pos_i));
-Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness; % Throat diameter with added wall thickness
+Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness_throat; % Throat diameter with added wall thickness
 % Number of channels determined Geo.At throat
 Geo.circ_t_base = pi * (Geo.D_t_base); % Gas side diameter + wall thickness
 Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol));
-% Local circumferences across engine
-Geo.circ_local_base = pi * Geo.D_channel_base;
+Geo.circ_local_base = pi * Geo.D_channel_base; % Local circumferences across engine
 Geo.w_channel = (Geo.circ_local_base - (Geo.num_channel * Geo.w_rib)) ./ Geo.num_channel; % variable, channel widths
 
-for i = 1:1:length(Geo.pos_i)
-    if (i <= Geo.pos_conv)
-        Geo.h_channel(i) = -((Geo.h_channel_chamber_forward - Geo.h_channel_chamber_aft)/Geo.pos_conv)*(i-1)+Geo.h_channel_chamber_forward;
-    elseif (i > Geo.pos_conv && i <= Geo.pos_throat)
-        Geo.h_channel(i) = ((Geo.h_channel_chamber_aft - Geo.h_channel_throat)/(Geo.D_channel_base_chamber - Geo.D_channel_base_throat))*...
-            (Geo.D_channel_base(i) - Geo.D_channel_base_chamber) + Geo.h_channel_chamber_aft;
-    else
-        Geo.h_channel(i) = ((Geo.h_channel_throat - Geo.h_channel_nozzle)/(Geo.D_channel_base_throat - Geo.D_channel_base_nozzle))*...
-            (Geo.D_channel_base(i) - Geo.D_channel_base_throat) + Geo.h_channel_throat;
-    end
-end
+% Interpolate channel height
+Geo.h_channel = zeros(size(Geo.pos_i));
+Geo.h_channel(m_conv) = -((Geo.h_channel_chamber_forward - Geo.h_channel_chamber_aft)/Geo.pos_conv).*(m_conv-1) + Geo.h_channel_chamber_forward;
+Geo.h_channel(m_thr)  = ((Geo.h_channel_chamber_aft - Geo.h_channel_throat)/(Geo.D_channel_base_chamber - Geo.D_channel_base_throat)) .* ...
+    (Geo.D_channel_base(m_thr) - Geo.D_channel_base_chamber) + Geo.h_channel_chamber_aft;
+Geo.h_channel(m_noz)  = ((Geo.h_channel_throat - Geo.h_channel_nozzle)/(Geo.D_channel_base_throat - Geo.D_channel_base_nozzle)) .* ...
+    (Geo.D_channel_base(m_noz) - Geo.D_channel_base_throat) + Geo.h_channel_throat;
+
 
 Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
 Geo.Per_heated = Geo.w_channel + 2 * Geo.h_channel; % heated perimeter
 
-%% HT Areas
 Geo.A_gas = pi .* Geo.D_gas .* Geo.dl; % Gas-wall convection SA
 Geo.A_w = pi .* ((Geo.D_gas + Geo.D_channel_base)./2) .* Geo.dl; % wall-wall conduction SA (average diameter)
 Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface area (heated)
@@ -249,7 +239,7 @@ xline(0, 'r--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility'
 exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
 hold off;
 
-%% Build txt Files
+%% CAD txt Files
 
 zero_array = zeros(length(Geo.pos_i), 1);
 
@@ -302,9 +292,6 @@ tables_loaded = false;
 if isfile(table_filename)
     tbl = load(table_filename);
     if isfield(tbl, 'table_version') && tbl.table_version == table_version_req
-        %get_rho = tbl.get_rho; get_cp = tbl.get_cp; get_mu = tbl.get_mu; get_k = tbl.get_k;
-        %get_T_sat = tbl.get_T_sat; get_rho_l = tbl.get_rho_l; get_rho_v = tbl.get_rho_v;
-        %get_surften = tbl.get_surften; get_h_fg = tbl.get_h_fg; get_P_sat = tbl.get_P_sat;
         P_vec = tbl.P_vec; T_vec = tbl.T_vec;
         Cool = tbl.Cool;
         tables_loaded = true;
@@ -420,32 +407,14 @@ if ~tables_loaded % create tables first time (rebuild when table_version_req is 
     Cool.get_surften = griddedInterpolant(P_vec(sat_idx), surften_grid(sat_idx), 'linear', 'nearest');
     Cool.get_h_fg = griddedInterpolant(P_vec(sat_idx), h_fg_grid(sat_idx), 'linear', 'nearest');
     Cool.get_P_sat = griddedInterpolant(T_sat_grid(sat_idx), P_vec(sat_idx), 'linear', 'nearest');
-
     table_version = table_version_req;
-
     save(table_filename,'Cool','P_vec', 'T_vec', 'table_version');
 end
 
 %% Material Properties
-Mat.r = 1e-4;
-
-% 316 stainless
-%T_mp = 1643.15; % K
-% Wall thermal conductivity k_w = f(T)
-%Mat.k_w_ref_temps = [-0.15, 19.85, 26.85, 76.85, 126.85, 226.85, 326.85, 426.85, 526.85, 626.85, ...
-    %726.85, 826.85, 926.85, 1026.9, 1126.9, 1226.9, 1326.9, 1370.9, 1398.9, 1426.9] + 273.15; % K
-%Mat.k_w_ref = [12.97, 13.31, 13.44, 14.32, 15.16, 16.8, 18.36, 19.87, 21.39, 22.79, 24.06, 25.46, 26.74, ...
-    %28.02, 29.32, 30.61, 31.86, 32.41, 26.9, 27.24];
-%Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200] + 273.15;
-%Mat.E_ref = [1.95*10^11 1.91*10^11 1.86*10^11 1.8*10^11 1.73*10^11 ...
-    %1.64*10^11 1.55*10^11 1.44*10^11 1.31*10^11 1.17*10^11 1*10^11 ...
-    %8.1*10^10 5.1*10^10]; 
-%Mat.nu_ref = [0.25 0.26 0.275 0.315 0.33 0.3 0.32 0.31 0.24 0.24 0.24 0.24 0.24];
-%Mat.alpha_ref_temps = [100 200 300 400 600 800 1000 1200 1500] + 273.15;
-%Mat.alpha_ref = [9.2 12.6 14.9 16.6 19.8 22.6 25.4 28.0 31.7] .* 10^-6;
+Mat.r = 1e-4; % surface roughness
 
 % 17-4PH stainless
-
 Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
 Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
 Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
@@ -454,36 +423,7 @@ Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
 Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
 Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
 
-% 625 Inconel
-
-%Mat.k_w_ref_temps = [-18 21 38 93 204 316 427 538 649 760 871 982] + 273.15;
-%Mat.k_w_ref = [9.2 9.8 10.1 10.8 12.5 14.1 15.7 17.5 19 20.8 22.8 25.2];
-%Mat.ref_temps = [24 538 816 982 1093] + 273.15;
-%Mat.E_ref = [16.2 12.4 5.7 3.8 2.1] .* 10^10;
-%Mat.nu_ref = [0.278 0.305 0.33 0.33 0.33];
-%Mat.alpha_ref_temps = [93 204 316 427 538 649 760 871 927] + 273.15;
-%Mat.alpha_ref = [1.28 1.31 1.33 1.37 1.4 1.48 1.53 1.58 1.62] .* 10^-5;
-
-% 718 Inconel
-
-%Mat.k_w_ref_temps = [22 233 448 657 866 1079 1289 1500] + 273.15;
-%Mat.k_w_ref = [11.9 13.7 16.9 21.7 25.6 22.9 19.1 17.7];
-%Mat.ref_temps = [21 537 815 982 1093] + 273.15;
-%Mat.E_ref = [16.5 15.2 11 5.5 3.4] .* 10^10;
-%Mat.nu_ref = [0.3 0.28 0.323 0.368 0.4];
-%Mat.alpha_ref_temps = [427 538 649 871 1093 1827] + 273.15;
-%Mat.alpha_ref = [1.436 1.49 1.543 1.745 1.834 1.834] .* 10*-5;
-
-% Ti-6Al-4V
-
-%Mat.k_w_ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1650 1700 1800 1900 1950] + 273.15;
-%Mat.k_w_ref = [8.11 7.74 7.52 7.55 7.81 8.29 8.96 9.81 10.82 11.98 13.26 14.65 16.13 17.69 19.29 20.93 22.6 28.53 29.45 31.28 33.11 34.02];
-%Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
-%Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
-%Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
-%Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
-%Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
-
+% Thermal Coating: Type YSZ Zirconium Oxide
 Mat.k_Al2O3_ref_temps = [300 400 500 600 700 800 900 1000 1100 1200 1300 ...
     1400 1500 1600];
 Mat.k_Al2O3_ref = [36.9601 27.209 20.93 16.3045 12.558 10.4650 8.9999 7.9534 7.1792 ...
@@ -504,6 +444,7 @@ Arrays.q_flux_array = zeros(size(Geo.pos_i));
 Arrays.h_i_array = zeros(size(Geo.pos_i));
 Arrays.h_c_array = zeros(size(Geo.pos_i));
 Arrays.h_c_f_array = zeros(size(Geo.pos_i));
+Arrays.h_tp_array = zeros(size(Geo.pos_i));
 Arrays.h_nb_array = zeros(size(Geo.pos_i));
 Arrays.CHF_array = zeros(size(Geo.pos_i));
 Arrays.stress_array = zeros(size(Geo.pos_i));
@@ -519,6 +460,10 @@ Arrays.fin_eff_array = zeros(size(Geo.pos_i));
 Arrays.q_error_array = zeros(size(Geo.pos_i));
 Arrays.iter_T_array = zeros(size(Geo.pos_i));
 Arrays.sigma_array = zeros(size(Geo.pos_i));
+
+% FEA Arrays
+Arrays.h_c_FEA_array = zeros(size(Geo.pos_i));
+Arrays.h_g_array = zeros(size(Geo.pos_i));
 
 %% Main Loop
 Loop.P_guess = convpres(500, 'psi', 'Pa');
@@ -564,10 +509,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Loop.rho_c_v = Cool.get_rho_v(Loop.P_loc);
         Loop.surften = Cool.get_surften(Loop.P_loc);
         Loop.h_fg = Cool.get_h_fg(Loop.P_loc);
-
         Loop.quality = max(0,(Loop.cp_c * (Loop.T_bulk - Loop.T_sat)) / Loop.h_fg); % capped at 0 for Elfaham
         Loop.prandtl_c = Loop.mu_c * Loop.cp_c / Loop.k_c;
-       
         Loop.vel_c = Param.mdot_f / (Loop.A_c_cs_tot * Loop.rho_c);
         Loop.Re = (Loop.rho_c * Loop.D_h_loc * Loop.vel_c) / Loop.mu_c;
         Arrays.Re_array(d) = Loop.Re;
@@ -592,9 +535,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         else % Transition
             Loop.f_calc = 0.02783 + (7.17*10^-6)*(Loop.Re - 2300);
         end
-
         Arrays.f_array(d) = Loop.f_calc;
-
+        
         Loop.Pr = (Loop.cp_c*Loop.mu_c)/Loop.k_c;
         Loop.Nu = ((Loop.f_calc/8)*(Loop.Re-1000)*Loop.Pr)/...
             (1+12.7*(Loop.f_calc/8)^0.5*(Loop.Pr^(2/3)-1)); % Gnielinski 
@@ -607,7 +549,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         
         %Temp Loops
         Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d);
-        Temp = outer_wall_temp(Geo, Loop, Temp, Param);
+        Temp = outer_wall_temp(Geo, Loop, Temp, Param, d);
         
         Arrays.T_fin_array(d) = Temp.T_fin_tip;
         Arrays.T_ow_array(d) = Temp.T_ow;
@@ -621,7 +563,11 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Arrays.q_eq_array(d) = Temp.q_eq;
         Arrays.h_c_f_array(d) = Temp.h_c_f;
         Arrays.h_nb_array(d) = Temp.h_nb;
+        Arrays.h_tp_array(d) = Temp.h_tp;
         Arrays.sigma_array(d) = Temp.sigma;
+        % FEA Arrays
+        Arrays.h_c_FEA_array(d) = Temp.h_c_FEA;
+        Arrays.h_g_array(d) = Temp.h_g;
         
         % Check CHF
         q_flux = Temp.q_eq/Loop.A_conv;
@@ -662,7 +608,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         P_loss_tot = P_loss_mom + P_loss_area + P_loss_viscous;
         Arrays.P_loss_array(d) = P_loss_tot;
         Loop.P_loc = Loop.P_loc - P_loss_tot; 
-        Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
+        %Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
+        Arrays.P_array(d) = Loop.P_loc;
 
         % Stresses
         Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
@@ -672,7 +619,6 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
      end
 
      current_P_error = Loop.P_loc - P_target;
-     
      % Secant
      if Loop.iter_P == 1
          Loop.P_prev_error = current_P_error;
@@ -687,7 +633,6 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
          Loop.P_prev_error = current_P_error;
          Loop.P_guess = P_next;
      end
-
      Loop.P_error = current_P_error;
      if Loop.iter_P > 50
          disp('Pressure loop failed to converge');
@@ -721,7 +666,7 @@ hold on; grid on;
 plot(Geo.pos_i, Arrays.P_array, 'b', 'LineWidth', 2);
 title('Coolant Static Pressure')
 xlabel('Axial Position x (m)');
-ylabel('Pressure (psi)');
+ylabel('Pressure (Pa)');
 xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
 exportgraphics(gcf, 'pressure.pdf', 'ContentType','vector');
 
@@ -747,7 +692,7 @@ hold on; grid on;
 plot(Geo.pos_i, Arrays.h_i_array, 'r', 'LineWidth', 2);
 title('Gas Heat Transfer Coefficient')
 xlabel('Axial Position x (m)');
-ylabel('Heat Transfer Coefficient (W/m^2*K)');
+ylabel('Heat Transfer Coefficient (kg/m^2 * s)');
 xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
 exportgraphics(gcf, 'gashtc.pdf', 'ContentType','vector');
 hold off;
@@ -757,7 +702,8 @@ hold on; grid on;
 plot(Geo.pos_i, Arrays.h_c_array, 'b', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.h_c_f_array, 'g', 'LineWidth', 2);
 plot(Geo.pos_i, Arrays.h_nb_array, 'r', 'LineWidth', 2);
-legend('Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling')
+plot(Geo.pos_i, Arrays.h_tp_array, 'm', 'LineWidth', 2);
+legend('Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined')
 title('Coolant Heat Transfer Coefficient')
 xlabel('Axial Position x (m)');
 ylabel('Heat Transfer Coefficient (W/m^2*K)');
@@ -782,306 +728,3 @@ title('Von Mises Stress')
 xlabel('Axial Position x (m)');
 ylabel('Psi');
 xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-%{
-% Friction Factor
-figure('Name', 'Darcy Friction Factor', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.f_array, 'b', 'LineWidth', 2);
-title('Friction Factor')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Nu
-figure('Name', 'Nusselt Number', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.Nu_array, 'b', 'LineWidth', 2);
-title('Nusselt Number')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Saturation Temp
-figure('Name', 'Saturation Temp', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.T_sat_array, 'b', 'LineWidth', 2);
-title('Saturation Temp')
-xlabel('Axial Position x (m)');
-ylabel('K');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Re
-figure('Name', 'Geo.Re', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.Re_array, 'b', 'LineWidth', 2);
-title('Geo.Re')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Coolant Velocity
-figure('Name', 'Coolant Velocity', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.vel_c_array, 'b', 'LineWidth', 2);
-title('Coolant Velocity')
-xlabel('Axial Position x (m)');
-ylabel('m/s');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Fin Eff
-figure('Name', 'Fin Efficiency', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.fin_eff_array, 'b', 'LineWidth', 2);
-title('Fin Efficiency')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Q Error
-figure('Name', 'Q error', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.q_error_array, 'b', 'LineWidth', 2);
-title('Q Error')
-xlabel('Axial Position x (m)');
-ylabel('Watts');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Iterations per Station
-figure('Name', 'Iterations per Station', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.iter_T_array, 'b', 'LineWidth', 2);
-title('Iterations per Station')
-xlabel('Axial Position x (m)');
-ylabel('Number of Iterations');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-% Sigma
-figure('Name', 'Sigma', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Arrays.sigma_array, 'k', 'LineWidth', 2);
-title('Sigma')
-xlabel('Axial Position x (m)');
-ylabel('Dimensionless');
-xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-
-%}
-
-
-%% Thermal Logic
-
-function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d) % HW Temp Iteration
-    Temp.T_tc_guess = 1500; % Initial Guess (1.25 FOS applied to material melting point)
-    T_tc_prev_guess = 1000; % Cooler lower bound (Luca's value)
-    tol_q = 0.1; % w
-    q_prev_error = 0;
-    Temp.iter_T = 0;
-    while true
-        Temp.iter_T = Temp.iter_T + 1;
-
-        % Gas convection HTC with Bartz
-        Temp.sigma = 1 / ...
-            ((0.5 * (Temp.T_tc_guess/Gas.T_stag)*(1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2) + 0.5)^0.68 *...
-            (1 + (Gas.gamma-1)/2 * Gas.M_local(d)^2)^0.12);
-        
-        Temp.h_g = ((0.026/Geo.D_t^0.2)*...
-            ((Gas.mu_g_local(d)^0.2*Gas.cp_g_local(d))/Gas.prandtl_g_local(d)^0.6)*...
-            (Param.Pc/Param.cstar_act)^0.8)*...
-            (Geo.D_t/Geo.R_curve)^0.1*...
-            (Geo.At/Gas.A_local(d))^0.9;
-
-        Temp.h_i = ((0.026/Geo.D_t^0.2)*...
-            (Gas.mu_g_local(d)^0.2/Gas.prandtl_g_local(d)^0.6)*...
-            (Param.Pc/Param.cstar_act)^0.8)*...
-            (Geo.D_t/Geo.R_curve)^0.1*...
-            (Geo.At/Gas.A_local(d))^0.9*...
-            Temp.sigma;
-
-        %Temp.q_eq = Temp.h_g*Loop.A_g_loc*(Loop.Taw_loc - Temp.T_hw_guess);
-        
-        i_w = get_iw(Cantera, Y_str, Gas, Temp);
-        Temp.q_eq = Temp.h_i * Loop.A_g_loc * (Gas.i_aw(d) - i_w);
-
-        Temp.k_Al2O3_loc = interp1(Mat.k_Al2O3_ref_temps, Mat.k_Al2O3_ref, Temp.T_tc_guess, 'linear', 'extrap');
-        Temp.k_ZrO2_loc = interp1(Mat.k_ZrO2_ref_temps, Mat.k_ZrO2_ref, Temp.T_tc_guess, 'linear', 'extrap');
-        Temp.k_coating = 0.9722*Temp.k_ZrO2_loc + 0.02778*Temp.k_Al2O3_loc; % Volume Fraction
-        
-        R_tc = (log((Loop.D_g_loc/2 + Geo.coat_thickness)/(Loop.D_g_loc/2)))/...
-            (2*pi*Temp.k_coating*Geo.dl(d));
-        Temp.T_hw = Temp.T_tc_guess - Temp.q_eq*R_tc;
-        Temp.T_hw = max(Loop.T_bulk + 1, min(Temp.T_hw, Loop.Taw_loc - 1));
-
-        % Fin Efficiency
-        Temp.k_w_loc = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, Temp.T_hw, 'linear', 'extrap');
-        Temp.fin_m = sqrt((2*Loop.h_c)/(Temp.k_w_loc * Geo.w_rib));
-        Temp.fin_eff = tanh(Temp.fin_m * Loop.ch) / (Temp.fin_m * Loop.ch);
-        Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+Geo.w_rib); % Fin corrected Loop.h_c
-        
-        Temp.T_cw = Temp.T_hw - (Temp.q_eq)*...
-            log(1+2*Geo.wall_thickness/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
-
-        % coolant side shares the convection term in both regimes so q_c is continuous at t_cw = t_sat
-        mass_flux = Param.mdot_f / Loop.A_conv;
-        dT_sub = Loop.T_sat - Loop.T_bulk;
-        dT_bulk = Temp.T_cw - Loop.T_bulk;
-        dT_sat = Temp.T_cw - Loop.T_sat;
-        Stanton = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.cp_c * dT_sub); % dimensionless
-        Peclet = mass_flux * Loop.D_h_loc * Loop.cp_c / Loop.k_c;
-        Boiling = abs(Temp.q_eq/Loop.A_base_loc) / (mass_flux * Loop.h_fg);
-
-        % Zhu-Bi-Yan Correlation
-        q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        if (Temp.T_cw >= Loop.T_sat)
-            if Stanton <= 38*Peclet^(-0.38) % partially boiling
-                Temp.h_nb = 0.00122*...
-                    (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
-                    ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
-                    ((dT_sat)^0.24)*...
-                    (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
-                S = (1 / (1 + 0.055*Loop.Re^0.16)) * (Loop.T_sat/dT_sub)^0.28;
-                Temp.h_tp = sqrt(Temp.h_c_f^2 + (S*Temp.h_nb*dT_sat/dT_bulk)^2);
-                q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-            else % fully developed boiling
-                q_c = 1000 * Loop.A_base_loc * dT_sat / (32 * exp(-Loop.P_loc/8.6*10^6)); % W, Zhu-Bi
-            end
-        end
-
-        % Elfaham Correlation
-        % Find Ms correction term
-        % if 1e-10 <= Boiling && Boiling < 1e-3 % actual lower bound 1e-5, change to this if Boiling within appropriate range
-        %     Ms = 0.7;
-        % elseif 1e-3 <= Boiling && Boiling < 5e-3
-        %     Ms = 1.5;
-        % elseif 5e-3 <= Boiling && Boiling < 1e-2
-        %     Ms = 1.3;
-        % else
-        %     Ms = 1.1;
-        % end
-        % q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        % Temp.h_nb = 0;
-        % if Temp.T_cw > Loop.T_sat
-        %     Temp.h_nb = 55 * (abs(Temp.q_eq/Loop.A_base_loc))^0.67 * Loop.P_reduced^0.12 * (-log10(Loop.P_reduced))^(-0.55) * Param.MW_coolant^(-0.5);
-        %     E = (1 + Loop.quality*Loop.prandtl_c*(Loop.rho_c_l/Loop.rho_c_v - 1))^0.35;
-        %     S = Ms / (1 + 0.055 * E^0.1 * Loop.Re^0.16);
-        %     Temp.h_tp = sqrt((S*Temp.h_nb)^2 + (E*Temp.h_c_f)^2);
-        %     q_c = Temp.h_tp * Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        % end
-        
-        % Chen Correlation
-        % q_c = Temp.h_c_f*Loop.A_base_loc*(Temp.T_cw - Loop.T_bulk);
-        % if Temp.T_cw > Loop.T_sat
-        %     Temp.h_nb = 0.00122*...
-        %         (((Loop.k_c^0.79)*(Loop.cp_c^0.45)*(Loop.rho_c_l^0.49))/...
-        %         ((Loop.surften^0.5)*(Loop.mu_c^0.29)*(Loop.h_fg^0.24)*(Loop.rho_c_v^0.24)))*...
-        %         ((Temp.T_cw-Loop.T_sat)^0.24)*...
-        %         (max(0, Cool.get_P_sat(min(Temp.T_cw, 513)) - Loop.P_loc))^0.75; % Cap at critical pressure for ethanol
-        %     S = 1/(1+(2.53*(10^-6))*(Loop.Re^1.17));
-        %     q_c = q_c + S*Temp.h_nb*(Temp.h_c_f/Loop.h_c)*Loop.A_base_loc*(Temp.T_cw - Loop.T_sat);
-        % end
-
-        % Secant
-        Temp.q_error = Temp.q_eq - q_c;
-        if abs(Temp.q_error) < tol_q
-            break;
-        end
-        if Temp.iter_T > 100
-            warning('t_hw failed to converge at station %d (residual %.3g w)', d, Temp.q_error);
-            break;
-        end
-        if Temp.iter_T == 1
-            q_prev_error = Temp.q_error;
-            temp_T = Temp.T_tc_guess;
-            Temp.T_tc_guess = T_tc_prev_guess;
-            T_tc_prev_guess = temp_T;
-        else
-            T_next = Temp.T_tc_guess - Temp.q_error * (Temp.T_tc_guess - T_tc_prev_guess) / (Temp.q_error - q_prev_error + 1e-10); % small buffer to avoid divide by 0
-            T_next = max(Loop.T_bulk + 1, min(T_next, Loop.Taw_loc - 1));
-            T_tc_prev_guess = Temp.T_tc_guess;
-            q_prev_error = Temp.q_error;
-            Temp.T_tc_guess = T_next;
-        end
-        
-    end
-
-    function i_w = get_iw(Cantera,Y_str, Gas, Temp)
-
-    Cantera.TPY = py.tuple({Temp.T_tc_guess, Gas.pressure(d), Y_str});
-    Cantera.equilibrate('TP');
-    i_w = double(Cantera.enthalpy_mass);
-
-    end
-
-end
-
-function Temp = outer_wall_temp(Geo, Loop, Temp, Param)
-    R_ow = Loop.D_g_loc/2 + Geo.wall_thickness + Loop.ch + Geo.out_wall_thickness;
-    C = (Temp.k_w_loc*Geo.w_rib*Temp.fin_m)/sinh(Temp.fin_m*Loop.ch);
-    Temp.T_fin_tip = (C*Temp.T_cw - C*Loop.T_bulk + C*Loop.T_bulk*cosh(Temp.fin_m*Loop.ch) +...
-        Loop.h_c*Loop.cw*Loop.T_bulk)/(C*cosh(Temp.fin_m*Loop.ch)+Loop.h_c*Loop.cw);
-
-    T_ow_error = realmax;
-    tol = 0.1;
-    T_ow_guess = Temp.T_fin_tip;
-    while (abs(T_ow_error) > tol)
-        k_visc = 15.51 * 10^-6; % for air at 298K and 1 atm
-        alpha = 22.39 * 10^-6;
-        Pr = k_visc/alpha;
-        beta = 3.43*10^-3;
-        Gr = (9.81*beta*(T_ow_guess - Param.T_amb)*(2*R_ow)^3)/k_visc^2;
-        Ra = Gr * Pr;
-        Nu = (0.6 + (0.387*Ra^(1/6))/((1+(0.559/Pr)^(9/16))^(8/27)))^2; % Churchill & Chu
-        k = 26.23*10^-3;
-        h_a = (Nu*k)/(R_ow*2);
-        R_cond = Geo.out_wall_thickness/(Temp.k_w_loc*(Geo.w_rib+Loop.cw));
-        R_conv = 1/(h_a*(Geo.w_rib+Loop.cw));
-        Temp.T_ow = Param.T_amb + (R_conv*(Temp.T_fin_tip-Param.T_amb))/(R_cond+R_conv);
-
-        T_ow_error = Temp.T_ow - T_ow_guess;
-        T_ow_guess = T_ow_guess + 0.5*T_ow_error;
-    end
-    Temp.T_ow = T_ow_guess;
-end
-
-%% Stresses
-
-function Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp)
-    p_diff = Loop.P_loc - Param.Pc;
-    r_in = Loop.D_g_loc/2;
-    r_out = r_in+Geo.wall_thickness+Loop.ch+Geo.out_wall_thickness;
-    r_avg = (r_in + r_out)/2;
-    Mat.E = interp1(Mat.ref_temps, Mat.E_ref, Temp.T_cw, 'linear', 'extrap');
-    Mat.nu = interp1(Mat.ref_temps, Mat.nu_ref, Temp.T_cw, 'linear', 'extrap');
-    Mat.alpha = interp1(Mat.alpha_ref_temps, Mat.alpha_ref, Temp.T_cw, 'linear', 'extrap');
-
-    % Shear
-    Stress.sigma_s_mech = 0.5*p_diff*(Loop.cw/Geo.wall_thickness);
-    Stress.sigma_s_therm = ((Loop.cw+Geo.w_rib)*Mat.alpha*Mat.E*...
-        (Loop.T_iw-Loop.T_ow)*Geo.wall_thickness*Geo.out_wall_thickness)/...
-        (5*Geo.w_rib*(1-Mat.nu)*...
-        (Geo.wall_thickness+Geo.out_wall_thickness)^2);
-    Stress.sigma_s_tot = Stress.sigma_s_mech + Stress.sigma_s_therm;
-
-    % Hoop
-    Stress.sigma_h_mech = (p_diff * r_avg)/...
-        (Geo.wall_thickness+Geo.out_wall_thickness);
-    Stress.sigma_h_therm = (Mat.alpha*Mat.E*(Loop.T_iw-Loop.T_ow)*...
-        Geo.out_wall_thickness) / ((1-Mat.nu)*...
-        (Geo.wall_thickness + Geo.out_wall_thickness));
-    Stress.sigma_h_tot = Stress.sigma_h_mech + Stress.sigma_h_therm;
-
-    % Bending
-    Stress.sigma_b = (p_diff * Loop.cw^2)/(2*Geo.wall_thickness^2);
-    
-    % Axial
-    if (d < Geo.pos_throat)
-        Stress.sigma_a = (Param.Pc*pi*((Loop.D_g_loc/2)^2-Geo.Rt^2))/...
-            ((pi*(r_out^2 - Geo.Rt^2))-...
-            (Geo.num_channel*Loop.cw*Loop.ch));
-    else
-        Stress.sigma_a = 0;
-    end
-
-    Stress.sigma_VM = sqrt(0.5*((Stress.sigma_a-Stress.sigma_h_tot)^2+...
-        (Stress.sigma_h_tot - Stress.sigma_b)^2 +...
-        (Stress.sigma_b - Stress.sigma_a)^2) + 3*Stress.sigma_s_tot^2);
-end
