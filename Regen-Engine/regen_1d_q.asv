@@ -110,7 +110,7 @@ Geo.theta_n = deg2rad(23); % deg
 
 %% Chamber and Converging Geometry
 Geo.conv_angle = deg2rad(45); % deg, standard
-Geo.L_star = 40; % in, optimal for ethanol/lox
+Geo.L_star = 35; % in, optimal for ethanol/lox
 Geo.CR = 5; % A_c / A_t
 %Geo.id_chanber = 4.75; % in, heritage
 Geo.V_total = convlength(Geo.L_star, 'in', 'm') * Geo.At; % m^3
@@ -183,15 +183,16 @@ Geo.D_t = 2 * Geo.Rt;
 
 Geo.h_channel_chamber_forward = Geo.min_tol*8;
 Geo.h_channel_chamber_aft = Geo.min_tol*8;
-Geo.h_channel_throat = Geo.min_tol*1;
+Geo.h_channel_throat = Geo.min_tol*2;
 Geo.h_channel_nozzle = Geo.min_tol*8;
 
 Geo.wall_thickness_forward = Geo.min_tol*3;
 Geo.wall_thickness_aft = Geo.min_tol*3;
 Geo.wall_thickness_throat = Geo.min_tol*2;
-Geo.wall_thickness_nozzle = Geo.min_tol*1;
+Geo.wall_thickness_nozzle = Geo.min_tol*3;
 
-Geo.coat_thickness = 0.0002; % HW/Loop.cw
+Geo.coat_thickness = 0.0002;
+Geo.wall_thickness = Geo.min_tol*2; % HW/Loop.cw
 Geo.out_wall_thickness = 0.005;
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 
@@ -202,8 +203,8 @@ for i = 1:1:length(Geo.pos_i)
         Geo.wall_thickness(i) = ((Geo.wall_thickness_aft - Geo.wall_thickness_throat)/(Geo.D_gas(Geo.pos_conv) - Geo.D_gas(Geo.pos_throat)))*...
             (Geo.D_gas(i) - Geo.D_gas(Geo.pos_conv)) + Geo.wall_thickness_aft;
     else
-        Geo.wall_thickness(i) = ((Geo.wall_thickness_nozzle - Geo.wall_thickness_throat)/(Geo.D_gas(length(Geo.pos_i)) - Geo.D_gas(Geo.pos_throat)))*...
-            (Geo.D_gas(i) - Geo.D_gas(Geo.pos_throat)) + Geo.wall_thickness_throat;
+        Geo.wall_thickness(i) = ((Geo.wall_thickness_throat - Geo.wall_thickness_nozzle)/(Geo.D_gas(Geo.pos_throat) - Geo.D_gas(length)))*...
+            (Geo.D_gas(i) - Geo.D_gas(Geo.pos_conv)) + Geo.wall_thickness_aft;
     end
 end
 
@@ -211,7 +212,7 @@ Geo.D_channel_base = Geo.D_gas + 2 * Geo.wall_thickness; % Engine diameters with
 Geo.D_channel_base_throat = Geo.D_channel_base(Geo.pos_throat);
 Geo.D_channel_base_chamber = Geo.D_channel_base(1);
 Geo.D_channel_base_nozzle = Geo.D_channel_base(length(Geo.pos_i));
-Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness_throat; % Throat diameter with added wall thickness
+Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness; % Throat diameter with added wall thickness
 % Number of channels determined Geo.At throat
 Geo.circ_t_base = pi * (Geo.D_t_base); % Gas side diameter + wall thickness
 Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol));
@@ -466,10 +467,10 @@ Mat.r = 1e-4;
 %Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
 %Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
 %Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
-Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
-Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
-Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
-Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
+%Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
+%Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
+%Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
+%Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
 
 % 625 Inconel
 
@@ -495,11 +496,11 @@ Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
 
 %Mat.k_w_ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1650 1700 1800 1900 1950] + 273.15;
 %Mat.k_w_ref = [8.11 7.74 7.52 7.55 7.81 8.29 8.96 9.81 10.82 11.98 13.26 14.65 16.13 17.69 19.29 20.93 22.6 28.53 29.45 31.28 33.11 34.02];
-%Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
-%Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
-%Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
-%Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
-%Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
+Mat.ref_temps = [20 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600] + 273.15;
+Mat.E_ref = [107 103.4 99.51 93.71 85.5 74.71 61.84 48.16 35.29 24 16.29 10.49 6.61 4.106 2.528 1.547 0.9435] .* 10^9;
+Mat.nu_ref = [0.323 0.328 0.334 0.339 0.345 0.351 0.357 0.363 0.369 0.374 0.38 0.386 0.392 0.398 0.403 0.409 0.415];
+Mat.alpha_ref_temps = [-233.15 -173.15 19.85 126.85 326.85 526.85 626.86 826.86] + 273.15;
+Mat.alpha_ref = [0.65 0.71 0.89 0.97 1.08 1.14 1.16 1.16] * .10^-5;
 
 % AlSi10Mg
 
@@ -629,7 +630,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         
         %Temp Loops
         Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d);
-        Temp = outer_wall_temp(Geo, Loop, Temp, Param, d);
+        Temp = outer_wall_temp(Geo, Loop, Temp, Param);
         
         Arrays.T_fin_array(d) = Temp.T_fin_tip;
         Arrays.T_ow_array(d) = Temp.T_ow;
@@ -687,10 +688,10 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
 
         % Stresses
-        %Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
-        %Loop.T_ow = Temp.T_ow;
-        %Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp);
-        %Arrays.stress_array(d) = convpres(Stress.sigma_VM, 'Pa', 'psi');
+        Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
+        Loop.T_ow = Temp.T_ow;
+        Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp);
+        Arrays.stress_array(d) = convpres(Stress.sigma_VM, 'Pa', 'psi');
      end
 
      current_P_error = Loop.P_loc - P_target;
@@ -940,7 +941,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+Geo.w_rib); % Fin corrected Loop.h_c
         
         Temp.T_cw = Temp.T_hw - (Temp.q_eq)*...
-            log(1+2*Geo.wall_thickness(d)/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
+            log(1+2*Geo.wall_thickness/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
 
         % coolant side shares the convection term in both regimes so q_c is continuous at t_cw = t_sat
         mass_flux = Param.mdot_f / Loop.A_conv;
@@ -1035,8 +1036,8 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
 
 end
 
-function Temp = outer_wall_temp(Geo, Loop, Temp, Param, d)
-    R_ow = Loop.D_g_loc/2 + Geo.wall_thickness(d) + Loop.ch + Geo.out_wall_thickness;
+function Temp = outer_wall_temp(Geo, Loop, Temp, Param)
+    R_ow = Loop.D_g_loc/2 + Geo.wall_thickness + Loop.ch + Geo.out_wall_thickness;
     C = (Temp.k_w_loc*Geo.w_rib*Temp.fin_m)/sinh(Temp.fin_m*Loop.ch);
     Temp.T_fin_tip = (C*Temp.T_cw - C*Loop.T_bulk + C*Loop.T_bulk*cosh(Temp.fin_m*Loop.ch) +...
         Loop.h_c*Loop.cw*Loop.T_bulk)/(C*cosh(Temp.fin_m*Loop.ch)+Loop.h_c*Loop.cw);
