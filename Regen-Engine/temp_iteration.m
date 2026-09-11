@@ -94,6 +94,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         
     end
     Temp.h_g = Temp.q_eq / (Loop.A_g_loc * (Gas.Taw(d) - Temp.T_tc_guess)); % for FEA
+    Temp.q_flux_gas = Temp.q_eq / Loop.A_g_loc;
 
     function i_w = get_iw(Cantera,Y_str, Gas, Temp)
         Cantera.TPY = py.tuple({Temp.T_tc_guess, Gas.pressure(d), Y_str});
