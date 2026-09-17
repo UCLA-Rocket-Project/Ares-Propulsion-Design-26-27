@@ -19,7 +19,7 @@ cstar_eff = 0.90;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 1.3;
+o_f = 1.25;
 Pc_us = 375; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
@@ -160,19 +160,19 @@ Geo.min_tol = 0.001; % m, 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
 Geo.coat_thickness = 0.0002; % m, Thermal Coating Thickness
-Geo.out_wall_thickness = 0.002; % m, Outer Jacket
+Geo.out_wall_thickness = 0.001; % m, Outer Jacket
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 
 % Variable Channel Height
 Geo.h_channel_chamber_forward = Geo.min_tol*10;
 Geo.h_channel_chamber_aft = Geo.min_tol*7;
 Geo.h_channel_throat = Geo.min_tol*1.5;
-Geo.h_channel_nozzle = Geo.min_tol*8;
+Geo.h_channel_nozzle = Geo.min_tol*3;
 % Variable Inner Wall Thickness
 Geo.wall_thickness_forward = Geo.min_tol*1.25;
 Geo.wall_thickness_aft = Geo.min_tol*1;
 Geo.wall_thickness_throat = Geo.min_tol*1;
-Geo.wall_thickness_nozzle = Geo.min_tol*1;
+Geo.wall_thickness_nozzle = Geo.min_tol*2;
 
 m_conv = 1:Geo.pos_conv;
 m_thr = (Geo.pos_conv + 1):Geo.pos_throat;
@@ -212,11 +212,11 @@ Geo.A_w = pi .* ((Geo.D_gas + Geo.D_channel_base)./2) .* Geo.dl; % wall-wall con
 Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface area (heated)
 Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 
-%% Visualization Plot % CAD Geometry Export
 r_channel_base = Geo.D_channel_base ./ 2;
 r_outer_jacket = r_channel_base + Geo.h_channel;
 r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
 
+%% Visualization Plot % CAD Geometry Export
 figure('Name', '1D Engine Geometry', 'Color', 'w');
 hold on; grid on;
 plot(Geo.pos_i, Geo.pos_j, 'k', 'LineWidth', 2, 'DisplayName', 'Hot Wall');
@@ -227,6 +227,7 @@ plot(Geo.pos_i, r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacke
 plot(Geo.pos_i, -r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
 plot(Geo.pos_i, r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
 plot(Geo.pos_i, -r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
+
 title('Regen 1D Profile')
 xlabel('Axial Position x (m)');
 ylabel('Radial Position y (m)');
@@ -236,10 +237,16 @@ exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
 hold off;
 
 zero_array = zeros(length(Geo.pos_i), 1);
-writematrix([zero_array, r_channel_base', Geo.pos_i'], 'channel_base.txt');
-writematrix([zero_array, r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
-writematrix([zero_array, r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
-writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
+% writematrix([zero_array, r_channel_base', Geo.pos_i'], 'channel_base.txt');
+% writematrix([zero_array, r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
+% writematrix([zero_array, r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
+% writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
+
+% NX upscaled export files
+writematrix([zero_array, r_channel_base' .* 1000, Geo.pos_i' .* 1000], 'channel_base.dat');
+writematrix([zero_array, r_outer_jacket' .* 1000, Geo.pos_i' .* 1000], 'outer_jacket.dat');
+writematrix([zero_array, r_outer_wall' .* 1000, Geo.pos_i' .* 1000], 'outer_wall.dat');
+writematrix([zero_array, Geo.pos_j' .* 1000, Geo.pos_i' .* 1000], 'hot_wall.dat');
 
 %% Gas and Coolant Properties
 % 1D interpolation from 3 CEA points for Cp, Gas.gamma, k, mu for Bartz
@@ -520,6 +527,7 @@ export_list = {
     Arrays.h_c_FEA_array, 'h_c_wall.csv';
     Arrays.gas_flux_array, 'gas_flux.csv';
     Arrays.k_coating_array, 'k_coating.csv';
+    Arrays.T_tc_array, 'T_coating.csv';
     };
 for y = 1:size(export_list, 1)
     current_data = export_list{y, 1};

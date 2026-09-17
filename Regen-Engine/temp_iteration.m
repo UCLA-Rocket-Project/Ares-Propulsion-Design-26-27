@@ -35,7 +35,7 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         Temp.k_w_loc = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, Temp.T_hw, 'linear', 'extrap');
         Temp.fin_m = sqrt((2*Loop.h_c)/(Temp.k_w_loc * Geo.w_rib));
         Temp.fin_eff = tanh(Temp.fin_m * Loop.ch) / (Temp.fin_m * Loop.ch);
-        Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+Geo.w_rib); % Fin corrected Loop.h_c
+        Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+2*Loop.ch); % Fin corrected Loop.h_c
         
         Temp.T_cw = Temp.T_hw - (Temp.q_eq)*...
             log(1+2*Geo.wall_thickness(d)/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
