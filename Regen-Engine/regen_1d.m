@@ -19,7 +19,7 @@ cstar_eff = 0.90;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 1.25;
+o_f = 1.3;
 Pc_us = 375; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
@@ -215,6 +215,26 @@ Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 r_channel_base = Geo.D_channel_base ./ 2;
 r_outer_jacket = r_channel_base + Geo.h_channel;
 r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+
+%% Aft Manifold Geometry
+theta = linspace(0, pi, 181); % Row vector
+R_boattail = 0.06521704; % m, inlet 1mm above exit
+%R_boattail = 0.06530975; % m, inlet 2mm above exit
+R_outer_exit = r_outer_wall(end-1);
+Z_exit = Geo.pos_i(end-1);
+
+A_downcomer = pi * (0.01332)^2; % -12 AN 26.64 mm was diameter -> 13.32 mm radius
+A_manifold_inlet = A_downcomer / 2; 
+A_manifold_min = Geo.w_channel(end-1) * Geo.h_channel(end-1); 
+
+W_max = R_boattail - R_outer_exit;
+W_min = Geo.w_channel(end-1); 
+
+% Calculate required Area and Width
+A_theta = A_manifold_inlet .* (1 - (theta ./ pi)) + A_manifold_min .* (theta ./ pi);
+W_theta = W_max .* (1 - (theta ./ pi)) + W_min .* (theta ./ pi);
+writematrix(A_theta.', 'Manifold_Area.csv');
+writematrix(W_theta.', 'Manifold_Width.csv');
 
 %% Visualization Plot % CAD Geometry Export
 figure('Name', '1D Engine Geometry', 'Color', 'w');
@@ -500,7 +520,6 @@ fig_configs = {
     'CoolantHTC', {'b', 'g', 'r', 'm'}, {Arrays.h_c_array, Arrays.h_c_f_array, Arrays.h_nb_array, Arrays.h_tp_array}, ...
         {'Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined'}, 'Heat Transfer Coefficient (W/m^2*K)', 'coolhtc.pdf'; 
     'Heat Transfer Rate', {'b'}, {Arrays.q_eq_array}, {'Heat Transfer Rate'}, 'Watts', '';
-    'Von Mises Stress', {'r'}, {Arrays.stress_array}, {'Von Mises Stress'}, 'Psi', '';
 };
 
 for i = 1:size(fig_configs, 1)
