@@ -19,7 +19,7 @@ cstar_eff = 0.90;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 1.3;
+o_f = 1.1;
 Pc_us = 375; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
@@ -126,6 +126,7 @@ Geo.pos_i = Geo.x_chamber_start:Geo.dx:Geo.x_exit; % axial position
 Geo.pos_j = zeros(size(Geo.pos_i)); % radii
 Geo.pos_throat = floor((Geo.len_chamber + Geo.len_conv)/Geo.dx);
 Geo.pos_conv = floor((Geo.len_chamber)/Geo.dx);
+Geo.pos_taper = 0; % Use if tapering geometry towards the injector
 % Diverging arc
 Geo.xn = (0.382 * Geo.Rt) * sin(Geo.theta_n); % diverging tangent point where parabola starts (Geo.theta_n)
 Geo.Rn = Geo.Rt + (0.382 * Geo.Rt) * (1 - cos(Geo.theta_n)); % y coordinate of Geo.xn
@@ -160,19 +161,20 @@ Geo.min_tol = 0.001; % m, 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
 Geo.coat_thickness = 0.0002; % m, Thermal Coating Thickness
-Geo.out_wall_thickness = 0.002; % m, Outer Jacket
+Geo.out_wall_thickness = 0.001; % m, Outer Jacket
 Geo.w_rib = Geo.min_tol; % fixed, rib width
+Geo.min_cw = Geo.min_tol;
 
 % Variable Channel Height
 Geo.h_channel_chamber_forward = Geo.min_tol*10;
 Geo.h_channel_chamber_aft = Geo.min_tol*7;
 Geo.h_channel_throat = Geo.min_tol*1.5;
-Geo.h_channel_nozzle = Geo.min_tol*8;
+Geo.h_channel_nozzle = Geo.min_tol*3;
 % Variable Inner Wall Thickness
 Geo.wall_thickness_forward = Geo.min_tol*1.25;
 Geo.wall_thickness_aft = Geo.min_tol*1;
-Geo.wall_thickness_throat = Geo.min_tol*1;
-Geo.wall_thickness_nozzle = Geo.min_tol*1;
+Geo.wall_thickness_throat = Geo.min_tol*0.8;
+Geo.wall_thickness_nozzle = Geo.min_tol*2;
 
 m_conv = 1:Geo.pos_conv;
 m_thr = (Geo.pos_conv + 1):Geo.pos_throat;
@@ -192,7 +194,7 @@ Geo.D_channel_base_nozzle = Geo.D_channel_base(length(Geo.pos_i));
 Geo.D_t_base = Geo.D_t + 2 * Geo.wall_thickness_throat; % Throat diameter with added wall thickness
 % Number of channels determined Geo.At throat
 Geo.circ_t_base = pi * (Geo.D_t_base); % Gas side diameter + wall thickness
-Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_tol));
+Geo.num_channel = floor(Geo.circ_t_base / (Geo.w_rib + Geo.min_cw));
 Geo.circ_local_base = pi * Geo.D_channel_base; % Local circumferences across engine
 Geo.w_channel = (Geo.circ_local_base - (Geo.num_channel * Geo.w_rib)) ./ Geo.num_channel; % variable, channel widths
 
@@ -277,8 +279,6 @@ Cool = load_coolprop('coolprop_tables.mat', 3, x_eth, x_h2o, mfrac_eth, mfrac_h2
 %% Material Properties
 Mat.r = 1e-4; % surface roughness
 
-% 718 Inconel
-
 Mat.k_w_ref_temps = [22 233 448 657 866 1079 1289 1500] + 273.15;
 Mat.k_w_ref = [11.9 13.7 16.9 21.7 25.6 22.9 19.1 17.7];
 Mat.ref_temps = [21 537 815 982 1093] + 273.15;
@@ -320,6 +320,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
 
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
+        disp(d);
         Loop.cw = Geo.w_channel(d);
         Loop.ch = Geo.h_channel(d);
         Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
@@ -456,9 +457,10 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         % Stresses
         Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
         Loop.T_ow = Temp.T_ow;
-        Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp);
-        Arrays.stress_array(d) = convpres(Stress.sigma_VM, 'Pa', 'psi');
+        %Stress = stressAnalysis(Geo, Loop, Mat, Param, d, Temp);
+        %Arrays.stress_array(d) = convpres(Stress.sigma_VM, 'Pa', 'psi');
      end
+
 
      current_P_error = Loop.P_loc - P_target;
      % Secant
@@ -483,8 +485,8 @@ end
 
 %% Plots
 fig_configs = {
-    'Temperature', {'m', 'r', 'b', 'c', 'g', 'k'}, ...
-        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_sat_array}, ...
+    'Temperature', {'m', 'r', 'b', 'c', 'g', 'm'}, ...
+        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_tc_array}, ...
         {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
     'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (Pa)', 'pressure.pdf';
     'HeatFlux', {'r', 'k--', 'b--'}, {Arrays.q_flux_array, Arrays.CHF_array, Arrays.CHF_array_safe}, ...
