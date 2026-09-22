@@ -173,7 +173,7 @@ Geo.h_channel_nozzle = Geo.min_tol*3;
 % Variable Inner Wall Thickness
 Geo.wall_thickness_forward = Geo.min_tol*1.25;
 Geo.wall_thickness_aft = Geo.min_tol*1;
-Geo.wall_thickness_throat = Geo.min_tol*0.8;
+Geo.wall_thickness_throat = Geo.min_tol*1;
 Geo.wall_thickness_nozzle = Geo.min_tol*2;
 
 m_conv = 1:Geo.pos_conv;
@@ -451,8 +451,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         P_loss_tot = P_loss_mom + P_loss_area + P_loss_viscous;
         Arrays.P_loss_array(d) = P_loss_tot;
         Loop.P_loc = Loop.P_loc - P_loss_tot; 
-        %Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
-        Arrays.P_array(d) = Loop.P_loc;
+        Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
+        %Arrays.P_array(d) = Loop.P_loc;
 
         % Stresses
         Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
@@ -485,17 +485,17 @@ end
 
 %% Plots
 fig_configs = {
-    'Temperature', {'m', 'r', 'b', 'c', 'g', 'm'}, ...
-        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_tc_array}, ...
+    'Temperature', {'m', 'r', 'b', 'c', 'g', 'k'}, ...
+        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_sat_array}, ...
         {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
-    'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (Pa)', 'pressure.pdf';
+    'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (psi)', 'pressure.pdf';
     'HeatFlux', {'r', 'k--', 'b--'}, {Arrays.q_flux_array, Arrays.CHF_array, Arrays.CHF_array_safe}, ...
         {'Heat Flux', 'CHF Limit', 'CHF Limit -10%'}, 'Heat Flux (W/m^2)', 'heatflux.pdf';
     'GasHTC', {'r'}, {Arrays.h_i_array}, {'Gas Heat Transfer Coefficient'}, 'Heat Transfer Coefficient (kg/m^2*s)', 'gashtc.pdf';
     'CoolantHTC', {'b', 'g', 'r', 'm'}, {Arrays.h_c_array, Arrays.h_c_f_array, Arrays.h_nb_array, Arrays.h_tp_array}, ...
         {'Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined'}, 'Heat Transfer Coefficient (W/m^2*K)', 'coolhtc.pdf'; 
     'Heat Transfer Rate', {'b'}, {Arrays.q_eq_array}, {'Heat Transfer Rate'}, 'Watts', '';
-    'Von Mises Stress', {'r'}, {Arrays.stress_array}, {'Von Mises Stress'}, 'Psi', '';
+    'Coolant Velocity', {'b'}, {Arrays.vel_c_array}, {'Coolant Velocity'}, 'm/s', '';
 };
 
 for i = 1:size(fig_configs, 1)
