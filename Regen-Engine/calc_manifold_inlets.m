@@ -1,0 +1,41 @@
+load('Geo_struct.mat', 'Geo');
+
+%% Aft Manifold Geometry
+theta = linspace(0, pi, 181); % Row vector
+R_boattail = 0.065; % m, inlet 1mm above exit (06521704)
+%R_boattail = 0.06530975; % m, inlet 2mm above exit
+R_outer_exit = Geo.r_outer_wall(end-1);
+Z_exit = Geo.pos_i(end-1);
+
+D_downcomer = convlength(0.75, 'in', 'm'); % m, -12 AN
+A_downcomer = pi * (D_downcomer/2)^2;
+A_manifold_inlet = A_downcomer; % max
+A_manifold_min = 2*(Geo.w_channel(end-1) * Geo.h_channel(end-1)); 
+
+W_max = 0.75*(R_boattail - R_outer_exit); % knockdown factor to make downcomer fit more within boattail
+W_min = Geo.w_channel(end-1); 
+
+% Calculate required Area and Width
+A_theta = A_manifold_inlet .* (1 - (theta ./ pi)) + A_manifold_min .* (theta ./ pi);
+W_theta = W_max .* (1 - (theta ./ pi)) + W_min .* (theta ./ pi);
+writematrix(A_theta.', 'Manifold_Area.csv');
+writematrix(W_theta.', 'Manifold_Width.csv');
+
+%% Inlet Geometry (in mm)
+A_downcomer_mm = A_downcomer * 1e6;
+A_inlet = A_downcomer_mm / (0.5 * Geo.num_channel);
+W_inlet = 3.83998387; % from CAD
+proj_angle = convang(73, 'deg', 'rad'); % relative nozzle exit slant rel. to horizontal
+roof_angle = convang(45, 'deg', 'rad'); % angle for pointed top (prevent printing overhang)
+r_fillet = 0.5; % CAD fillet radius
+A_loss_r = r_fillet^2 * (1 + pi/4); % Area loss to right angle fillets
+A_loss_o = r_fillet^2 * (cot((roof_angle+pi/2)/2) - (pi - (roof_angle + pi/2))/2); % Area loss to obtuse angle fillets
+A_projected = A_inlet * sin(proj_angle);
+A_theo = A_projected + 3*A_loss_r + 2*A_loss_o;
+h_tri = 0.5 * W_inlet * tan(roof_angle);
+A_tri = 0.5 * W_inlet * h_tri;
+A_rec = A_theo - A_tri;
+h_rec = A_rec / W_inlet; % input in CAD
+
+
+

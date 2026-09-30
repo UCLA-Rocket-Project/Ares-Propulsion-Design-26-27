@@ -212,41 +212,23 @@ Geo.A_w = pi .* ((Geo.D_gas + Geo.D_channel_base)./2) .* Geo.dl; % wall-wall con
 Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface area (heated)
 Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 
-r_channel_base = Geo.D_channel_base ./ 2;
-r_outer_jacket = r_channel_base + Geo.h_channel;
-r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+Geo.r_channel_base = Geo.D_channel_base ./ 2;
+Geo.r_outer_jacket = Geo.r_channel_base + Geo.h_channel;
+Geo.r_outer_wall = Geo.r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
 
-%% Aft Manifold Geometry
-theta = linspace(0, pi, 181); % Row vector
-R_boattail = 0.06521704; % m, inlet 1mm above exit
-%R_boattail = 0.06530975; % m, inlet 2mm above exit
-R_outer_exit = r_outer_wall(end-1);
-Z_exit = Geo.pos_i(end-1);
-
-A_downcomer = pi * (0.01332)^2; % -12 AN 26.64 mm was diameter -> 13.32 mm radius
-A_manifold_inlet = A_downcomer / 2; 
-A_manifold_min = Geo.w_channel(end-1) * Geo.h_channel(end-1); 
-
-W_max = R_boattail - R_outer_exit;
-W_min = Geo.w_channel(end-1); 
-
-% Calculate required Area and Width
-A_theta = A_manifold_inlet .* (1 - (theta ./ pi)) + A_manifold_min .* (theta ./ pi);
-W_theta = W_max .* (1 - (theta ./ pi)) + W_min .* (theta ./ pi);
-writematrix(A_theta.', 'Manifold_Area.csv');
-writematrix(W_theta.', 'Manifold_Width.csv');
+save('Geo_struct.mat', 'Geo');
 
 %% Visualization Plot % CAD Geometry Export
 figure('Name', '1D Engine Geometry', 'Color', 'w');
 hold on; grid on;
 plot(Geo.pos_i, Geo.pos_j, 'k', 'LineWidth', 2, 'DisplayName', 'Hot Wall');
 plot(Geo.pos_i, -Geo.pos_j, 'k', 'LineWidth', 2, 'HandleVisibility','off');
-plot(Geo.pos_i, r_channel_base, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Cold Wall');
-plot(Geo.pos_i, -r_channel_base, 'b--', 'LineWidth', 1.5, 'HandleVisibility', 'off');
-plot(Geo.pos_i, r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacket');
-plot(Geo.pos_i, -r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
-plot(Geo.pos_i, r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
-plot(Geo.pos_i, -r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
+plot(Geo.pos_i, Geo.r_channel_base, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Cold Wall');
+plot(Geo.pos_i, -Geo.r_channel_base, 'b--', 'LineWidth', 1.5, 'HandleVisibility', 'off');
+plot(Geo.pos_i, Geo.r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacket');
+plot(Geo.pos_i, -Geo.r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
+plot(Geo.pos_i, Geo.r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
+plot(Geo.pos_i, -Geo.r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
 
 title('Regen 1D Profile')
 xlabel('Axial Position x (m)');
@@ -257,15 +239,15 @@ exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
 hold off;
 
 zero_array = zeros(length(Geo.pos_i), 1);
-% writematrix([zero_array, r_channel_base', Geo.pos_i'], 'channel_base.txt');
-% writematrix([zero_array, r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
-% writematrix([zero_array, r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
+% writematrix([zero_array, Geo.r_channel_base', Geo.pos_i'], 'channel_base.txt');
+% writematrix([zero_array, Geo.r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
+% writematrix([zero_array, Geo.r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
 % writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
 
 % NX upscaled export files
-writematrix([zero_array, r_channel_base' .* 1000, Geo.pos_i' .* 1000], 'channel_base.dat');
-writematrix([zero_array, r_outer_jacket' .* 1000, Geo.pos_i' .* 1000], 'outer_jacket.dat');
-writematrix([zero_array, r_outer_wall' .* 1000, Geo.pos_i' .* 1000], 'outer_wall.dat');
+writematrix([zero_array, Geo.r_channel_base' .* 1000, Geo.pos_i' .* 1000], 'channel_base.dat');
+writematrix([zero_array, Geo.r_outer_jacket' .* 1000, Geo.pos_i' .* 1000], 'outer_jacket.dat');
+writematrix([zero_array, Geo.r_outer_wall' .* 1000, Geo.pos_i' .* 1000], 'outer_wall.dat');
 writematrix([zero_array, Geo.pos_j' .* 1000, Geo.pos_i' .* 1000], 'hot_wall.dat');
 
 %% Gas and Coolant Properties
