@@ -9,7 +9,7 @@ F = 1465 * 4.44822; % Target thrust in N
 Pamb = 12.3; % psia
 Param.T_amb = 298; % K (from feed calc sheet)
 mfrac_eth = 0.75; mfrac_h2o = 1 - mfrac_eth; % fuel ratio
-mw_eth = 46.068; mw_h2o = 18.015; % g/mol
+mw_eth = 46.068; mw_h2o = 18.015; % g/mol, mass fraction
 x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); x_h2o = 1 - x_eth; % Mole fraction
 P_crit = [6140000, 22064000]; % ethanol, water
 Param.P_crit_mix = x_eth * P_crit(1) + x_h2o * P_crit(2); % fuel mixture
@@ -308,7 +308,7 @@ Mat.k_ZrO2_ref = [2.93 2.512];
 arr_names = {'T_fin', 'T_ow', 'T_hw', 'T_tc', 'T_cw', 'T_bulk', 'P', 'P_loss', ...
              'q_flux', 'h_i', 'h_c', 'h_c_f', 'h_tp', 'h_nb', 'CHF', 'CHF_safe', ...
              'stress', 'q_eq', 'f', 'Nu', 'T_sat', 'Re', 'vel_c', 'fin_eff', ...
-             'q_error', 'iter_T', 'sigma', 'h_c_FEA', 'h_g', 'gas_flux', 'k_coating'};
+             'q_error', 'iter_T', 'sigma', 'h_c_FEA', 'h_g', 'gas_flux', 'k_coating', 'k_wall', 'mu_c', 'surften'};
 for idx = 1:length(arr_names)
     Arrays.([arr_names{idx}, '_array']) = zeros(size(Geo.pos_i));
 end
@@ -364,6 +364,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Loop.Re = (Loop.rho_c * Loop.D_h_loc * Loop.vel_c) / Loop.mu_c;
         Arrays.Re_array(d) = Loop.Re;
         Arrays.vel_c_array(d) = Loop.vel_c;
+        Arrays.mu_c_array(d) = Loop.mu_c;
+        Arrays.surften_array(d) = Loop.surften;
 
         if (Loop.Re>4000) % Turbulent
             f_guess = 64/Loop.Re; % Initial guess
@@ -419,6 +421,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Arrays.h_g_array(d) = Temp.h_g;
         Arrays.gas_flux_array(d) = Temp.q_flux_gas;
         Arrays.k_coating_array(d) = Temp.k_coating;
+        Arrays.k_wall_array(d) = Temp.k_w_loc;
         
         % Check CHF
         q_flux = Temp.q_eq/Loop.A_conv;
