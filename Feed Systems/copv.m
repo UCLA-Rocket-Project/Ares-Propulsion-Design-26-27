@@ -10,7 +10,7 @@ P_tank_burn_psi = 488; % psi
 
 OF = 1.30;
 prop_mass_lbm = 100; % lbm
-burn_time = 15.06; % s
+burn_time = 14.91; % s
 
 V_lox_tank_L = 25.0; % L
 V_fuel_tank_L = 25.0; % L
@@ -19,13 +19,14 @@ V_copv_L = 12.0; % L
 rho_lox = 1129.6; % kg/m^3
 rho_fuel = 853.4; % kg/m^3 (75 wt% ethanol, 25 wt% water at 480 psi, which is burn tank pressure)
 
-P_copv_start_psi = 4500; % pressure BEFORE ISO VALVE OPENS (tanks at ambien), psi
-T_copv_start = 293.15; % K
+P_copv_start_psi = 4400; % pressure BEFORE ISO VALVE OPENS (tanks at ambien), psi
+T_copv_start = 323.15; % K
 polytropic_n = 1.667; % COPV polytropic exponent, assume isentropic process, for He, gamma=1.667
 
-T_ullage_initial = 293.15; % K
-T_ullage_prefire = 293.15; % sketchy, K
-
+T_ullage_initial_lox  = 200.0;  % K — partially chilled
+T_ullage_initial_fuel = 293.15; % K
+T_ullage_prefire_lox  = 200.0;  % K
+T_ullage_prefire_fuel = 293.15; % K
 dt = 0.01; % timestep, s
 
 
@@ -47,21 +48,25 @@ P_tank_burn = P_tank_burn_psi * PSI_TO_PA;
 P_copv = P_copv_start_psi * PSI_TO_PA;
 
 V_copv = V_copv_L * L_TO_M3;
-V_lox_tank = V_lox_tank_L * L_TO_M3;
-V_fuel_tank = V_fuel_tank_L * L_TO_M3;
+%%V_lox_tank = V_lox_tank_L * L_TO_M3;
+%%V_fuel_tank = V_fuel_tank_L * L_TO_M3;
 
 prop_mass = prop_mass_lbm * LBM_TO_KG;
+ull_frac = 0.05; 
 
 %% INITIAL CALCULATIONS %%
 m_fuel = prop_mass / (1 + OF);
 m_lox = prop_mass - m_fuel;
-
+fprintf('LOX ullage prefire temp:  %.1f K\n', T_ullage_prefire_lox);
+fprintf('Fuel ullage prefire temp: %.1f K\n', T_ullage_prefire_fuel);
 mdot_total = prop_mass / burn_time;
 mdot_fuel = mdot_total / (1 + OF);
 mdot_lox = mdot_total - mdot_fuel;
 
 V_lox_liquid = m_lox / rho_lox;
 V_fuel_liquid = m_fuel / rho_fuel;
+V_lox_tank  = V_lox_liquid  / (1 - ull_frac);   % 23.88 L
+V_fuel_tank = V_fuel_liquid / (1 - ull_frac);   % 24.32 L
 
 V_ullage_lox = V_lox_tank - V_lox_liquid;
 V_ullage_fuel = V_fuel_tank - V_fuel_liquid;
@@ -84,11 +89,9 @@ m_he_copv = rho_copv * V_copv;
 m_he_copv_start = m_he_copv;
 
 
-T_ullage_lox = T_ullage_initial;
-T_ullage_fuel = T_ullage_initial;
-
-% we're assuming that the initial ullage is helium as well for simplicity
-m_he_ullage_lox = P_ambient * V_ullage_lox / (R_He * T_ullage_lox);
+T_ullage_lox  = T_ullage_initial_lox;
+T_ullage_fuel = T_ullage_initial_fuel;
+m_he_ullage_lox  = P_ambient * V_ullage_lox  / (R_He * T_ullage_lox);
 m_he_ullage_fuel = P_ambient * V_ullage_fuel / (R_He * T_ullage_fuel);
 
 U_ullage_lox = m_he_ullage_lox * cv_He * T_ullage_lox;
@@ -99,9 +102,10 @@ P_ullage_fuel = P_ambient;
 
 %% INITIAL PRESSURIZATION (AMBIENT -> 535 psi)
 
-m_he_ullage_lox_prefire = P_prefire * V_ullage_lox / (R_He * T_ullage_prefire);
-
-m_he_ullage_fuel_prefire = P_prefire * V_ullage_fuel / (R_He * T_ullage_prefire);
+rho_he_prefire_lox  = double(py.CoolProp.CoolProp.PropsSI('D', 'P', P_prefire, 'T', T_ullage_prefire_lox,  'Helium'));
+rho_he_prefire_fuel = double(py.CoolProp.CoolProp.PropsSI('D', 'P', P_prefire, 'T', T_ullage_prefire_fuel, 'Helium'));
+m_he_ullage_lox_prefire  = rho_he_prefire_lox  * V_ullage_lox;
+m_he_ullage_fuel_prefire = rho_he_prefire_fuel * V_ullage_fuel;
 
 % required helium for initial pressurization
 m_he_prepress_lox = max(m_he_ullage_lox_prefire - m_he_ullage_lox, 0);
@@ -116,8 +120,8 @@ end
 m_he_ullage_lox = m_he_ullage_lox_prefire;
 m_he_ullage_fuel = m_he_ullage_fuel_prefire;
 
-T_ullage_lox = T_ullage_prefire;
-T_ullage_fuel = T_ullage_prefire;
+T_ullage_lox  = T_ullage_prefire_lox;
+T_ullage_fuel = T_ullage_prefire_fuel;
 
 P_ullage_lox = P_prefire;
 P_ullage_fuel = P_prefire;
@@ -139,7 +143,8 @@ P_copv_ignition = P_copv;
 T_copv_ignition = T_copv;
 m_he_copv_ignition = m_he_copv;
 
-fprintf('Assumed pre-fire ullage temp: %.1f K\n', T_ullage_prefire);
+fprintf('Assumed pre-fire LOX ullage temp:  %.1f K\n', T_ullage_prefire_lox);
+fprintf('Assumed pre-fire fuel ullage temp: %.1f K\n', T_ullage_prefire_fuel);
 fprintf('Pre-fire LOX tank pressure:   %.1f psi\n', P_ullage_lox / PSI_TO_PA);
 fprintf('Pre-fire fuel tank pressure:  %.1f psi\n', P_ullage_fuel / PSI_TO_PA);
 fprintf('Helium used for prepress:      %.4f kg\n', m_he_prepress);
