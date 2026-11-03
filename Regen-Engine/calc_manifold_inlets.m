@@ -2,7 +2,7 @@ load('Geo_struct.mat', 'Geo');
 
 %% Aft Manifold Geometry
 theta = linspace(0, pi, 181); % Row vector
-R_boattail = 0.065; % m, inlet 1mm above exit (06521704)
+R_boattail = 0.0635; % m, inlet right above exit
 %R_boattail = 0.06530975; % m, inlet 2mm above exit
 R_outer_exit = Geo.r_outer_wall(end-1);
 Z_exit = Geo.pos_i(end-1);
@@ -12,7 +12,7 @@ A_downcomer = pi * (D_downcomer/2)^2;
 A_manifold_inlet = A_downcomer; % max
 A_manifold_min = 2*(Geo.w_channel(end-1) * Geo.h_channel(end-1)); 
 
-W_max = 0.75*(R_boattail - R_outer_exit); % knockdown factor to make downcomer fit more within boattail
+W_max = 0.85*(R_boattail - R_outer_exit); % knockdown factor to make downcomer fit more within boattail and 1mm raised height
 W_min = Geo.w_channel(end-1); 
 
 % Calculate required Area and Width
