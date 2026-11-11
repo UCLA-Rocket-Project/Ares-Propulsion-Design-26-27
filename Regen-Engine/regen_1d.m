@@ -5,7 +5,7 @@ set(groot, 'defaultFigureColor', 'w', 'defaultAxesColor', 'w', ...
     'defaultAxesXColor', 'k', 'defaultAxesYColor', 'k', 'defaultTextColor', 'k');
 
 %% Basic Parameters
-F = 1465 * 4.44822; % Target thrust in N
+F = 1480 * 4.44822; % Target thrust in N
 Pamb = 12.3; % psia
 Param.T_amb = 298; % K (from feed calc sheet)
 mfrac_eth = 0.75; mfrac_h2o = 1 - mfrac_eth; % fuel ratio
@@ -19,8 +19,8 @@ cstar_eff = 0.90;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 1.1;
-Pc_us = 375; % psia, target
+o_f = 0.8;
+Pc_us = 300; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
     'h,cal=-66370.0      t(k)=298.00      wt%%=75.00\n', ...
@@ -90,13 +90,13 @@ Geo.R_curve = 1.5 * Geo.Rt;
 %% Diverging Geometry
 Geo.Ae = Geo.At * exp_ratio; % m^2
 Geo.R_exit = sqrt(Geo.Ae/pi); % m
-Geo.percent_len = 0.8; % input (0.8 is optimal fractional length for most cases)
+Geo.percent_len = 0.8 ; % input (0.8 is optimal fractional length for most cases)
 Geo.len_div = Geo.percent_len * ((Geo.R_exit - Geo.Rt)/tan(deg2rad(15))); % m diverging length from radii
 Geo.theta_e = deg2rad(13); Geo.theta_n = deg2rad(23); % deg, from HH fig 4.16
 
 %% Chamber and Converging Geometry
 Geo.conv_angle = deg2rad(45); % deg, standard
-Geo.L_star = 35; % in, optimal for ethanol/lox
+Geo.L_star = 45; % in, optimal for ethanol/lox
 Geo.CR = 5; % A_c / A_t
 Geo.V_total = convlength(Geo.L_star, 'in', 'm') * Geo.At; % m^3
 Geo.Rc = Geo.Rt * sqrt(Geo.CR);
@@ -160,21 +160,21 @@ Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 Geo.min_tol = 0.001; % m, 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
-Geo.coat_thickness = 0.0002; % m, Thermal Coating Thickness
+Geo.coat_thickness = 0; % m, Thermal Coating Thickness
 Geo.out_wall_thickness = 0.001; % m, Outer Jacket
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 Geo.min_cw = Geo.min_tol;
 
 % Variable Channel Height
-Geo.h_channel_chamber_forward = Geo.min_tol*10;
-Geo.h_channel_chamber_aft = Geo.min_tol*7;
-Geo.h_channel_throat = Geo.min_tol*1.5;
-Geo.h_channel_nozzle = Geo.min_tol*3;
+Geo.h_channel_chamber_forward = Geo.min_tol*5.35;
+Geo.h_channel_chamber_aft = Geo.min_tol*2;
+Geo.h_channel_throat = Geo.min_tol*1;
+Geo.h_channel_nozzle = Geo.min_tol*2;
 % Variable Inner Wall Thickness
-Geo.wall_thickness_forward = Geo.min_tol*1.25;
+Geo.wall_thickness_forward = Geo.min_tol*1;
 Geo.wall_thickness_aft = Geo.min_tol*1;
-Geo.wall_thickness_throat = Geo.min_tol*0.8;
-Geo.wall_thickness_nozzle = Geo.min_tol*2;
+Geo.wall_thickness_throat = Geo.min_tol*1;
+Geo.wall_thickness_nozzle = Geo.min_tol*1;
 
 m_conv = 1:Geo.pos_conv;
 m_thr = (Geo.pos_conv + 1):Geo.pos_throat;
@@ -279,13 +279,13 @@ Cool = load_coolprop('coolprop_tables.mat', 3, x_eth, x_h2o, mfrac_eth, mfrac_h2
 %% Material Properties
 Mat.r = 1e-4; % surface roughness
 
-Mat.k_w_ref_temps = [22 233 448 657 866 1079 1289 1500] + 273.15;
-Mat.k_w_ref = [11.9 13.7 16.9 21.7 25.6 22.9 19.1 17.7];
-Mat.ref_temps = [21 537 815 982 1093] + 273.15;
-Mat.E_ref = [16.5 15.2 11 5.5 3.4] .* 10^10;
-Mat.nu_ref = [0.3 0.28 0.323 0.368 0.4];
-Mat.alpha_ref_temps = [427 538 649 871 1093 1827] + 273.15;
-Mat.alpha_ref = [1.436 1.49 1.543 1.745 1.834 1.834] .* 10*-5;
+Mat.k_w_ref_temps = [21 168 354 521 688] + 273.15;
+Mat.k_w_ref = [15.2 18 19.9 20.6 28.1];
+Mat.ref_temps = [25 221 307 377 455 525 612 684 794 889] + 273.15;
+Mat.E_ref = [2.04 1.9 1.87 1.82 1.76 1.68 1.53 1.42 1.29 1.17] .* 10^11;
+Mat.nu_ref = [0.291 0.295 0.296 0.305 0.316 0.309 0.322 0.332 0.348 0.361];
+Mat.alpha_ref_temps = [100 200 300 400 500] + 273.15;
+Mat.alpha_ref = [1.04 1.10 1.14 1.18 1.20] .* 10^-5;
 
 % Thermal Coating: Type YSZ Zirconium Oxide
 Mat.k_Al2O3_ref_temps = [300 400 500 600 700 800 900 1000 1100 1200 1300 ...
@@ -299,7 +299,7 @@ Mat.k_ZrO2_ref = [2.93 2.512];
 arr_names = {'T_fin', 'T_ow', 'T_hw', 'T_tc', 'T_cw', 'T_bulk', 'P', 'P_loss', ...
              'q_flux', 'h_i', 'h_c', 'h_c_f', 'h_tp', 'h_nb', 'CHF', 'CHF_safe', ...
              'stress', 'q_eq', 'f', 'Nu', 'T_sat', 'Re', 'vel_c', 'fin_eff', ...
-             'q_error', 'iter_T', 'sigma', 'h_c_FEA', 'h_g', 'gas_flux', 'k_coating'};
+             'q_error', 'iter_T', 'sigma', 'h_c_FEA', 'h_g', 'gas_flux', 'k_coating', 'k_w_loc', 'k_coating'};
 for idx = 1:length(arr_names)
     Arrays.([arr_names{idx}, '_array']) = zeros(size(Geo.pos_i));
 end
@@ -392,6 +392,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d);
         Temp = outer_wall_temp(Geo, Loop, Temp, Param, d);
         
+        Arrays.k_w_loc_array(d) = Temp.k_w_loc;
+        Arrays.k_coating_array(d) = Temp.k_coating;
         Arrays.T_fin_array(d) = Temp.T_fin_tip;
         Arrays.T_ow_array(d) = Temp.T_ow;
         Arrays.T_cw_array(d) = Temp.T_cw;

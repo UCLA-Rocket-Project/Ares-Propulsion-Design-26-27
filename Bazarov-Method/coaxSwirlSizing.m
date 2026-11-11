@@ -47,12 +47,12 @@ Chart.alpha = interp1(Chart.Aalpha, alphaU, Chart.AQalpha, 'pchip');
 
 Param.numElements = 9;
 Param.minFlangeThickness = 0.01;
-Param.wallThickness = 0.0005;
+Param.wallThickness = 0.001;
 
     % Imperial
-Param.PcUS = 370; % Psia
-Param.mdotTotUS = 6.639; % lbm/s
-Param.OF = 1.4;
+Param.PcUS = 375; % Psia
+Param.mdotTotUS = 6.708; % lbm/s
+Param.OF = 1.3;
 Param.mdotFUS = Param.mdotTotUS/(1+Param.OF); % lbm/s
 Param.mdotOXUS = (Param.mdotTotUS*Param.OF)/(1+Param.OF); % lbm/s
 
@@ -60,7 +60,7 @@ Param.mdotOXUS = (Param.mdotTotUS*Param.OF)/(1+Param.OF); % lbm/s
 Param.Pc = convpres(Param.PcUS, 'psi', 'Pa'); % Pa
 Fuel.mdot = convmass(Param.mdotFUS, 'lbm', 'kg') / Param.numElements; % kg/s
 Ox.mdot = convmass(Param.mdotOXUS, 'lbm', 'kg') / Param.numElements; % kg/s
-Fuel.stiffness = 0.2;
+Fuel.stiffness = 0.15;
 Ox.stiffness = 0.2;
 Fuel.dP = Fuel.stiffness*Param.Pc;
 Ox.dP = Ox.stiffness*Param.Pc;
@@ -78,8 +78,8 @@ Ox.rho = py.CoolProp.CoolProp.PropsSI('D', 'T', Ox.temp, 'P', Ox.manifoldPressur
 
 % Chosen Parameters
 
-Fuel.inLengthFactor = 3; % 3-6, factor to mult inlet radius for inlet length
-Ox.inLengthFactor = 3; 
+Fuel.inLengthFactor = 6; % 3-6, factor to mult inlet radius for inlet length
+Ox.inLengthFactor = 6; 
 Fuel.nozLengthFactor = 0.5; % 0.5-2 factor to mult nozzle radius for nozzle length
 Ox.nozLengthFactor = 2;
 Fuel.chamLengthFactor = 2; % >2 factor to mult inlet radius vortex-chamber length
