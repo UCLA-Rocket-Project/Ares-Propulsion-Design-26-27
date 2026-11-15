@@ -320,7 +320,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
 
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
-        disp(d);
+        % disp(d);
         Loop.cw = Geo.w_channel(d);
         Loop.ch = Geo.h_channel(d);
         Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
@@ -487,8 +487,8 @@ end
 
 %% Plots
 fig_configs = {
-    'Temperature', {'m', 'r', 'b', 'c', 'g', 'm'}, ...
-        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_tc_array}, ...
+    'Temperature', {'m', 'r', 'b', 'c', 'g', 'k'}, ...
+        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_sat_array}, ...
         {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
     'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (Pa)', 'pressure.pdf';
     'HeatFlux', {'r', 'k--', 'b--'}, {Arrays.q_flux_array, Arrays.CHF_array, Arrays.CHF_array_safe}, ...

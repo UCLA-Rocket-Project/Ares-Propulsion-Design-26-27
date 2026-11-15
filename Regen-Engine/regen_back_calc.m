@@ -1,7 +1,9 @@
-function Knockdown = regen_back_calc(C)
+function Arrays = regen_back_calc(kd_guess, do_plot)
+    if nargin < 2
+        do_plot = true;
+    end
 % Test script for 1d regen engine
 
-clc; clear; close all;
 set(groot, 'defaultFigureColor', 'w', 'defaultAxesColor', 'w', ...
     'defaultAxesXColor', 'k', 'defaultAxesYColor', 'k', 'defaultTextColor', 'k');
 
@@ -216,33 +218,35 @@ Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface a
 Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 
 %% Visualization Plot % CAD Geometry Export
-r_channel_base = Geo.D_channel_base ./ 2;
-r_outer_jacket = r_channel_base + Geo.h_channel;
-r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
-
-figure('Name', '1D Engine Geometry', 'Color', 'w');
-hold on; grid on;
-plot(Geo.pos_i, Geo.pos_j, 'k', 'LineWidth', 2, 'DisplayName', 'Hot Wall');
-plot(Geo.pos_i, -Geo.pos_j, 'k', 'LineWidth', 2, 'HandleVisibility','off');
-plot(Geo.pos_i, r_channel_base, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Cold Wall');
-plot(Geo.pos_i, -r_channel_base, 'b--', 'LineWidth', 1.5, 'HandleVisibility', 'off');
-plot(Geo.pos_i, r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacket');
-plot(Geo.pos_i, -r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
-plot(Geo.pos_i, r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
-plot(Geo.pos_i, -r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
-title('Regen 1D Profile')
-xlabel('Axial Position x (m)');
-ylabel('Radial Position y (m)');
-axis equal;
-xline(0, 'r--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
-hold off;
-
-zero_array = zeros(length(Geo.pos_i), 1);
-writematrix([zero_array, r_channel_base', Geo.pos_i'], 'channel_base.txt');
-writematrix([zero_array, r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
-writematrix([zero_array, r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
-writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
+if do_plot
+    r_channel_base = Geo.D_channel_base ./ 2;
+    r_outer_jacket = r_channel_base + Geo.h_channel;
+    r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+    
+    figure('Name', '1D Engine Geometry', 'Color', 'w');
+    hold on; grid on;
+    plot(Geo.pos_i, Geo.pos_j, 'k', 'LineWidth', 2, 'DisplayName', 'Hot Wall');
+    plot(Geo.pos_i, -Geo.pos_j, 'k', 'LineWidth', 2, 'HandleVisibility','off');
+    plot(Geo.pos_i, r_channel_base, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Cold Wall');
+    plot(Geo.pos_i, -r_channel_base, 'b--', 'LineWidth', 1.5, 'HandleVisibility', 'off');
+    plot(Geo.pos_i, r_outer_jacket, 'b', 'LineWidth', 2, 'DisplayName', 'Outer Jacket');
+    plot(Geo.pos_i, -r_outer_jacket, 'b', 'LineWidth', 2, 'HandleVisibility', 'off');
+    plot(Geo.pos_i, r_outer_wall, 'k', 'LineWidth', 2, 'DisplayName', 'Outer Wall');
+    plot(Geo.pos_i, -r_outer_wall, 'k', 'LineWidth', 2, 'HandleVisibility', 'off');
+    title('Regen 1D Profile')
+    xlabel('Axial Position x (m)');
+    ylabel('Radial Position y (m)');
+    axis equal;
+    xline(0, 'r--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
+    exportgraphics(gcf, 'geometry.pdf', 'ContentType','vector');
+    hold off;
+    
+    zero_array = zeros(length(Geo.pos_i), 1);
+    writematrix([zero_array, r_channel_base', Geo.pos_i'], 'channel_base.txt');
+    writematrix([zero_array, r_outer_jacket', Geo.pos_i'], 'outer_jacket.txt');
+    writematrix([zero_array, r_outer_wall', Geo.pos_i'], 'outer_wall.txt');
+    writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
+end
 
 %% Gas and Coolant Properties
 % 1D interpolation from 3 CEA points for Cp, Gas.gamma, k, mu for Bartz
@@ -321,7 +325,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
 
     for d = length(Geo.pos_i):-1:1 % Axial marching loop
         % Local Geometry, add channel height array earlier
-        disp(d);
+        % disp(d);
         Loop.cw = Geo.w_channel(d);
         Loop.ch = Geo.h_channel(d);
         Loop.A_conv = Geo.num_channel * (Loop.cw + 2*Loop.ch) * Geo.dl(d);
@@ -390,7 +394,7 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         Loop.Taw_loc = Gas.Taw(d); % Local adiabatic wall temp
         
         %Temp Loops
-        Temp = temp_iteration_back_calc(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d, C);
+        Temp = temp_iteration_back_calc(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop, d, kd_guess);
         Temp = outer_wall_temp(Geo, Loop, Temp, Param, d);
         
         Arrays.k_w_loc_array(d) = Temp.k_w_loc;
@@ -454,8 +458,8 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
         P_loss_tot = P_loss_mom + P_loss_area + P_loss_viscous;
         Arrays.P_loss_array(d) = P_loss_tot;
         Loop.P_loc = Loop.P_loc - P_loss_tot; 
-        %Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
-        Arrays.P_array(d) = Loop.P_loc;
+        Arrays.P_array(d) = convpres(Loop.P_loc, 'Pa', 'psi');
+        %Arrays.P_array(d) = Loop.P_loc;
 
         % Stresses
         Loop.T_iw = (Temp.T_hw + Temp.T_cw)/2;
@@ -487,30 +491,29 @@ while abs(Loop.P_error) > Loop.tol_P % Pressure guess loop
 end
 
 %% Plots
-fig_configs = {
-    'Temperature', {'m', 'r', 'b', 'c', 'g', 'm'}, ...
-        {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_tc_array}, ...
-        {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
-    'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (Pa)', 'pressure.pdf';
-    'HeatFlux', {'r', 'k--', 'b--'}, {Arrays.q_flux_array, Arrays.CHF_array, Arrays.CHF_array_safe}, ...
-        {'Heat Flux', 'CHF Limit', 'CHF Limit -10%'}, 'Heat Flux (W/m^2)', 'heatflux.pdf';
-    'GasHTC', {'r'}, {Arrays.h_i_array}, {'Gas Heat Transfer Coefficient'}, 'Heat Transfer Coefficient (kg/m^2*s)', 'gashtc.pdf';
-    'CoolantHTC', {'b', 'g', 'r', 'm'}, {Arrays.h_c_array, Arrays.h_c_f_array, Arrays.h_nb_array, Arrays.h_tp_array}, ...
-        {'Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined'}, 'Heat Transfer Coefficient (W/m^2*K)', 'coolhtc.pdf'; 
-    'Heat Transfer Rate', {'b'}, {Arrays.q_eq_array}, {'Heat Transfer Rate'}, 'Watts', '';
-    'Von Mises Stress', {'r'}, {Arrays.stress_array}, {'Von Mises Stress'}, 'Psi', '';
-};
-
-for i = 1:size(fig_configs, 1)
-    figure('Name', fig_configs{i, 1}, 'Color', 'w'); hold on; grid on;
-    for j = 1:length(fig_configs{i, 3})
-        plot(Geo.pos_i, fig_configs{i, 3}{j}, fig_configs{i, 2}{j}, 'LineWidth', 2, 'DisplayName', fig_configs{i, 4}{j});
+if do_plot
+    fig_configs = {
+        'Temperature', {'m', 'r', 'b', 'c', 'g', 'k'}, ...
+            {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_sat_array}, ...
+            {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
+        'HeatFlux', {'r', 'k--', 'b--'}, {Arrays.q_flux_array, Arrays.CHF_array, Arrays.CHF_array_safe}, ...
+            {'Heat Flux', 'CHF Limit', 'CHF Limit -10%'}, 'Heat Flux (W/m^2)', 'heatflux.pdf';
+        'GasHTC', {'r'}, {Arrays.h_i_array}, {'Gas Heat Transfer Coefficient'}, 'Heat Transfer Coefficient (kg/m^2*s)', 'gashtc.pdf';
+        'CoolantHTC', {'b', 'g', 'r', 'm'}, {Arrays.h_c_array, Arrays.h_c_f_array, Arrays.h_nb_array, Arrays.h_tp_array}, ...
+            {'Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined'}, 'Heat Transfer Coefficient (W/m^2*K)', 'coolhtc.pdf'; 
+    };
+    
+    for i = 1:size(fig_configs, 1)
+        figure('Name', fig_configs{i, 1}, 'Color', 'w'); hold on; grid on;
+        for j = 1:length(fig_configs{i, 3})
+            plot(Geo.pos_i, fig_configs{i, 3}{j}, fig_configs{i, 2}{j}, 'LineWidth', 2, 'DisplayName', fig_configs{i, 4}{j});
+        end
+        if length(fig_configs{i, 4}) > 1; legend(); end
+        title(fig_configs{i, 1}); xlabel('Axial Position x (m)'); ylabel(fig_configs{i, 5});
+        xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
+        if ~isempty(fig_configs{i, 6}); exportgraphics(gcf, fig_configs{i, 6}, 'ContentType','vector'); end
+        hold off;
     end
-    if length(fig_configs{i, 4}) > 1; legend(); end
-    title(fig_configs{i, 1}); xlabel('Axial Position x (m)'); ylabel(fig_configs{i, 5});
-    xline(0, 'k--', 'Throat', 'LabelVerticalAlignment', 'bottom', 'HandleVisibility', 'off');
-    if ~isempty(fig_configs{i, 6}); exportgraphics(gcf, fig_configs{i, 6}, 'ContentType','vector'); end
-    hold off;
 end
 
 end
