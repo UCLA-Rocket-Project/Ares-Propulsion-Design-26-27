@@ -5,9 +5,9 @@ set(groot, 'defaultFigureColor', 'w', 'defaultAxesColor', 'w', ...
     'defaultAxesXColor', 'k', 'defaultAxesYColor', 'k', 'defaultTextColor', 'k');
 
 %% Basic Parameters
-F = 1480 * 4.44822; % Target thrust in N
+F = 1252 * 4.44822; % Target thrust in N
 Pamb = 12.3; % psia
-Param.T_amb = 298; % K (from feed calc sheet)
+Param.T_amb = 290; % K (from feed calc sheet)
 mfrac_eth = 0.75; mfrac_h2o = 1 - mfrac_eth; % fuel ratio
 mw_eth = 46.068; mw_h2o = 18.015; % g/mol
 x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); x_h2o = 1 - x_eth; % Mole fraction
@@ -15,12 +15,12 @@ P_crit = [6140000, 22064000]; % ethanol, water
 Param.P_crit_mix = x_eth * P_crit(1) + x_h2o * P_crit(2); % fuel mixture
 oxidizer = 'LOX';
 % Assumed efficiencies
-cstar_eff = 0.90;
+cstar_eff = 0.95;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 0.8;
-Pc_us = 300; % psia, target
+o_f = 1;
+Pc_us = 250; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
     'h,cal=-66370.0      t(k)=298.00      wt%%=75.00\n', ...

@@ -15,12 +15,12 @@ P_crit = [6140000, 22064000]; % ethanol, water
 Param.P_crit_mix = x_eth * P_crit(1) + x_h2o * P_crit(2); % fuel mixture
 oxidizer = 'LOX';
 % Assumed efficiencies
-cstar_eff = 0.90;
+cstar_eff = 0.95;
 cf_eff = 0.98;
 
 % CEA parameters
-o_f = 0.8;
-Pc_us = 300; % psia, target
+o_f = 1;
+Pc_us = 250; % psia, target
 Param.Pc = convpres(Pc_us, 'psi', 'Pa');
 card_str = sprintf(['fuel C2H5OH(L)   C 2 H 6 O 1\n', ...
     'h,cal=-66370.0      t(k)=298.00      wt%%=75.00\n', ...
@@ -487,7 +487,7 @@ end
 
 %% Plots
 fig_configs = {
-    'Temperature', {'m', 'r', 'b', 'c', 'g', 'm'}, ...
+    'Temperature', {'m', 'r', 'b', 'c', 'g', 'k'}, ...
         {Arrays.T_tc_array, Arrays.T_hw_array, Arrays.T_cw_array, Arrays.T_bulk_array, Arrays.T_fin_array, Arrays.T_sat_array}, ...
         {'Thermal Coating', 'Hot Wall', 'Cold Wall', 'Bulk Coolant', 'Outer Jacket', 'Saturation'}, 'Temperature (K)', 'temperatures.pdf';
     'Pressure', {'b'}, {Arrays.P_array}, {'Coolant Static Pressure'}, 'Pressure (Pa)', 'pressure.pdf';
