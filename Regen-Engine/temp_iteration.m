@@ -22,23 +22,41 @@ function Temp = temp_iteration(Param, Cantera, Y_str, Geo, Gas, Cool, Mat, Loop,
         i_w = get_iw(Cantera, Y_str, Gas, Temp);
         Temp.q_eq = Temp.h_i * Loop.A_g_loc * (Gas.i_aw(d) - i_w);
 
-        Temp.k_Al2O3_loc = interp1(Mat.k_Al2O3_ref_temps, Mat.k_Al2O3_ref, Temp.T_tc_guess, 'linear', 'extrap');
-        Temp.k_ZrO2_loc = interp1(Mat.k_ZrO2_ref_temps, Mat.k_ZrO2_ref, Temp.T_tc_guess, 'linear', 'extrap');
-        Temp.k_coating = 0.9722*Temp.k_ZrO2_loc + 0.02778*Temp.k_Al2O3_loc; % Volume Fraction
-        
-        R_tc = (log((Loop.D_g_loc/2 + Geo.coat_thickness)/(Loop.D_g_loc/2)))/...
-            (2*pi*Temp.k_coating*Geo.dl(d));
-        Temp.T_hw = Temp.T_tc_guess - Temp.q_eq*R_tc;
-        Temp.T_hw = max(Loop.T_bulk + 1, min(Temp.T_hw, Loop.Taw_loc - 1));
+        hw_guess = 1000;
+        hw_error = realmax;
+        hw_tol = 1; %K
+        while abs(hw_error) > hw_tol
+            Temp.k_Al2O3_loc = interp1(Mat.k_Al2O3_ref_temps, Mat.k_Al2O3_ref, (Temp.T_tc_guess + hw_guess)/2, 'linear', 'extrap');
+            Temp.k_ZrO2_loc = interp1(Mat.k_ZrO2_ref_temps, Mat.k_ZrO2_ref, (Temp.T_tc_guess + hw_guess)/2, 'linear', 'extrap');
+            Temp.k_coating = 0.9722*Temp.k_ZrO2_loc + 0.02778*Temp.k_Al2O3_loc; % Volume Fraction
+
+            R_tc = (log((Loop.D_g_loc/2 + Geo.coat_thickness)/(Loop.D_g_loc/2)))/...
+                (2*pi*Temp.k_coating*Geo.dl(d));
+            Temp.T_hw = Temp.T_tc_guess - Temp.q_eq*R_tc;
+            Temp.T_hw = max(Loop.T_bulk + 1, min(Temp.T_hw, Loop.Taw_loc - 1));
+            hw_error = hw_guess - Temp.T_hw;
+            hw_guess = max(Loop.T_bulk + 1, min(Temp.T_hw + 0.3*hw_error, Loop.Taw_loc - 1));
+        end
+
+        cw_guess = Temp.T_hw-1;
+        cw_error = realmax;
+        cw_tol = 1; %K
+        while abs(cw_error) > cw_tol
+            Temp.k_w_loc = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, (Temp.T_hw + cw_guess)/2, 'linear', 'extrap');
+            Temp.T_cw = Temp.T_hw - (Temp.q_eq)*...
+                log(1+2*Geo.wall_thickness(d)/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
+            Temp.T_cw = max(Loop.T_bulk, min(Temp.T_cw, Temp.T_hw));
+            cw_error = cw_guess - Temp.T_cw;
+            cw_guess = max(Loop.T_bulk, min(Temp.T_cw + 0.3*cw_error, Temp.T_hw));
+        end
 
         % Fin Efficiency
-        Temp.k_w_loc = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, Temp.T_hw, 'linear', 'extrap');
+        %Temp.k_w_loc = interp1(Mat.k_w_ref_temps, Mat.k_w_ref, Temp.T_hw, 'linear', 'extrap');
         Temp.fin_m = sqrt((2*Loop.h_c)/(Temp.k_w_loc * Geo.w_rib));
         Temp.fin_eff = tanh(Temp.fin_m * Loop.ch) / (Temp.fin_m * Loop.ch);
         Temp.h_c_f = Loop.h_c*(Loop.cw+2*Temp.fin_eff*Loop.ch)/(Loop.cw+2*Loop.ch); % Fin corrected Loop.h_c
         
-        Temp.T_cw = Temp.T_hw - (Temp.q_eq)*...
-            log(1+2*Geo.wall_thickness(d)/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
+        %Temp.T_cw = Temp.T_hw - (Temp.q_eq)*log(1+2*Geo.wall_thickness(d)/(Loop.D_g_loc+2*Geo.coat_thickness))/(2*pi*Geo.dl(d)*Temp.k_w_loc); % Cold wall temp derived from guess
 
         % coolant side shares the convection term in both regimes so q_c is continuous at t_cw = t_sat
         mass_flux = Param.mdot_f / Loop.A_conv;
