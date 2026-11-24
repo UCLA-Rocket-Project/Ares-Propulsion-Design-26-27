@@ -1,7 +1,7 @@
 clc; clear; close all;
 
 load('Geo_struct.mat');
-T_measured = 394.9; % from TC data, bulk temp (K)
+T_measured = convtemp(100, 'C', 'K'); % from TC data, bulk temp (K)
 Loc_measured = 0.32; % m, from the exit
 Loc_script = Geo.pos_i(end) - Loc_measured; % m, relative to nozzle exit
 [~, node_script] = min(abs(Geo.pos_i - Loc_script)); % find closest axial station to measured loc

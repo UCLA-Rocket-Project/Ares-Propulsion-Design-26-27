@@ -209,19 +209,36 @@ Geo.h_channel(m_thr)  = ((Geo.h_channel_chamber_aft - Geo.h_channel_throat)/(Geo
 Geo.h_channel(m_div)  = ((Geo.h_channel_throat - Geo.h_channel_nozzle)/(Geo.D_channel_base_throat - Geo.D_channel_base_nozzle)) .* ...
     (Geo.D_channel_base(m_div) - Geo.D_channel_base_throat) + Geo.h_channel_throat;
 
-Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
-Geo.Per_heated = Geo.w_channel + 2 * Geo.h_channel; % heated perimeter
+%% Import CAD Geometry
+HW_CAD = readtable('SSHW.txt');
+CW_CAD = readtable('SSCW.txt');
+OW_CAD = readtable('SSOW.txt');
+Geo.pos_i = transpose(HW_CAD{:, 3})*0.001;
+Geo.pos_j = transpose(HW_CAD{:, 1})*0.001;
+r_channel_base = transpose(CW_CAD{:, 1})*0.001;
+r_outer_jacket = transpose(OW_CAD{:, 1})*0.001;
+r_outer_wall = r_outer_jacket + 0.001;
+Geo.D_gas = Geo.pos_j * 2;
+Geo.D_channel_base = 2 * r_channel_base;
+Geo.dx_slope = gradient(Geo.pos_j, Geo.dx);
+Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
+Geo.Rc = Geo.pos_j(3);
+Geo.Rt = Geo.pos_j(255);
+Geo.At = pi*Geo.Rt^2;
+
+%Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
+%Geo.Per_heated = Geo.w_channel + 2 * Geo.h_channel; % heated perimeter
 % HT Areas
 Geo.A_gas = pi .* Geo.D_gas .* Geo.dl; % Gas-wall convection SA
 Geo.A_w = pi .* ((Geo.D_gas + Geo.D_channel_base)./2) .* Geo.dl; % wall-wall conduction SA (average diameter)
-Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface area (heated)
-Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
+%Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface area (heated)
+%Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 
 %% Visualization Plot % CAD Geometry Export
 if do_plot
-    r_channel_base = Geo.D_channel_base ./ 2;
-    r_outer_jacket = r_channel_base + Geo.h_channel;
-    r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+    %r_channel_base = Geo.D_channel_base ./ 2;
+    %r_outer_jacket = r_channel_base + Geo.h_channel;
+    %r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
     
     figure('Name', '1D Engine Geometry', 'Color', 'w');
     hold on; grid on;

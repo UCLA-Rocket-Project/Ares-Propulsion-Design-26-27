@@ -5,9 +5,9 @@ set(groot, 'defaultFigureColor', 'w', 'defaultAxesColor', 'w', ...
     'defaultAxesXColor', 'k', 'defaultAxesYColor', 'k', 'defaultTextColor', 'k');
 
 %% Basic Parameters
-F = 1480 * 4.44822; % Target thrust in N
+F = 1252 * 4.44822; % Target thrust in N
 Pamb = 12.3; % psia
-Param.T_amb = 298; % K (from feed calc sheet)
+Param.T_amb = 290; % K (from feed calc sheet)
 mfrac_eth = 0.75; mfrac_h2o = 1 - mfrac_eth; % fuel ratio
 mw_eth = 46.068; mw_h2o = 18.015; % g/mol
 x_eth = (mfrac_eth/mw_eth) / (mfrac_eth/mw_eth + mfrac_h2o/mw_h2o); x_h2o = 1 - x_eth; % Mole fraction
@@ -206,7 +206,17 @@ Geo.h_channel(m_thr)  = ((Geo.h_channel_chamber_aft - Geo.h_channel_throat)/(Geo
 Geo.h_channel(m_div)  = ((Geo.h_channel_throat - Geo.h_channel_nozzle)/(Geo.D_channel_base_throat - Geo.D_channel_base_nozzle)) .* ...
     (Geo.D_channel_base(m_div) - Geo.D_channel_base_throat) + Geo.h_channel_throat;
 
-Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
+%% Import CAD Geometry
+HW_CAD = readtable('SSHW.txt');
+CW_CAD = readtable('SSCW.txt');
+OW_CAD = readtable('SSOW.txt');
+Geo.pos_j = HW_CAD{:, 2};
+r_channel_base = CW_CAD{:, 2};
+r_outer_jacket = OW_CAD{:, 2};
+r_outer_wall = r_outer_jacket + 0.001;
+Geo.D_gas = Geo.pos_j * 2;
+
+%Geo.D_h = (4 .* Geo.w_channel .* Geo.h_channel) ./ (2 * Geo.w_channel + 2 * Geo.h_channel); % hydraulic diameter of rectangular channels
 Geo.Per_heated = Geo.w_channel + 2 * Geo.h_channel; % heated perimeter
 % HT Areas
 Geo.A_gas = pi .* Geo.D_gas .* Geo.dl; % Gas-wall convection SA
@@ -215,9 +225,9 @@ Geo.A_co = Geo.Per_heated .* Geo.num_channel .* Geo.dl; % coolant side surface a
 Geo.A_wc = Geo.w_channel .* Geo.dl; % cool wall area per increment
 
 %% Visualization Plot % CAD Geometry Export
-r_channel_base = Geo.D_channel_base ./ 2;
-r_outer_jacket = r_channel_base + Geo.h_channel;
-r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
+%r_channel_base = Geo.D_channel_base ./ 2;
+%r_outer_jacket = r_channel_base + Geo.h_channel;
+%r_outer_wall = r_channel_base + Geo.h_channel + Geo.out_wall_thickness;
 
 figure('Name', '1D Engine Geometry', 'Color', 'w');
 hold on; grid on;
@@ -497,7 +507,6 @@ fig_configs = {
     'CoolantHTC', {'b', 'g', 'r', 'm'}, {Arrays.h_c_array, Arrays.h_c_f_array, Arrays.h_nb_array, Arrays.h_tp_array}, ...
         {'Gnielinsky', 'Fin-Corrected Gnielinsky', 'Nucleate Boiling', 'Combined'}, 'Heat Transfer Coefficient (W/m^2*K)', 'coolhtc.pdf'; 
     'Heat Transfer Rate', {'b'}, {Arrays.q_eq_array}, {'Heat Transfer Rate'}, 'Watts', '';
-    'Von Mises Stress', {'r'}, {Arrays.stress_array}, {'Von Mises Stress'}, 'Psi', '';
 };
 
 for i = 1:size(fig_configs, 1)
