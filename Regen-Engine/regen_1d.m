@@ -159,7 +159,7 @@ Geo.dl = Geo.dx .* sqrt(1 + Geo.dx_slope .^2);
 Geo.min_tol = 0.001; % m, 3d printer minimum feature
 Geo.D_gas = 2 * Geo.pos_j; % Array of gas-side diameter Geo.At every node
 Geo.D_t = 2 * Geo.Rt;
-Geo.coat_thickness = 0.0002; % m, Thermal Coating Thickness
+Geo.coat_thickness = 0.000; % m, Thermal Coating Thickness
 Geo.out_wall_thickness = 0.001; % m, Outer Jacket
 Geo.w_rib = Geo.min_tol; % fixed, rib width
 
