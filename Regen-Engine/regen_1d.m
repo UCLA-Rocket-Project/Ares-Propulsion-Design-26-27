@@ -171,7 +171,7 @@ Geo.h_channel_nozzle = Geo.min_tol*3;
 % Variable Inner Wall Thickness
 Geo.wall_thickness_forward = Geo.min_tol*1.25;
 Geo.wall_thickness_aft = Geo.min_tol*1;
-Geo.wall_thickness_throat = Geo.min_tol*1;
+Geo.wall_thickness_throat = Geo.min_tol*0.8;
 Geo.wall_thickness_nozzle = Geo.min_tol*2;
 
 m_conv = 1:Geo.pos_conv;
@@ -245,10 +245,10 @@ zero_array = zeros(length(Geo.pos_i), 1);
 % writematrix([zero_array, Geo.pos_j', Geo.pos_i'], 'hot_wall.txt');
 
 % NX upscaled export files
-writematrix([zero_array, Geo.r_channel_base' .* 1000, Geo.pos_i' .* 1000], 'channel_base.dat');
-writematrix([zero_array, Geo.r_outer_jacket' .* 1000, Geo.pos_i' .* 1000], 'outer_jacket.dat');
-writematrix([zero_array, Geo.r_outer_wall' .* 1000, Geo.pos_i' .* 1000], 'outer_wall.dat');
-writematrix([zero_array, Geo.pos_j' .* 1000, Geo.pos_i' .* 1000], 'hot_wall.dat');
+writematrix([zero_array, Geo.r_channel_base' .* 1000, Geo.pos_i' .* 1000], 'channel_base.txt');
+writematrix([zero_array, Geo.r_outer_jacket' .* 1000, Geo.pos_i' .* 1000], 'outer_jacket.txt');
+writematrix([zero_array, Geo.r_outer_wall' .* 1000, Geo.pos_i' .* 1000], 'outer_wall.txt');
+writematrix([zero_array, Geo.pos_j' .* 1000, Geo.pos_i' .* 1000], 'hot_wall.txt');
 
 %% Gas and Coolant Properties
 % 1D interpolation from 3 CEA points for Cp, Gas.gamma, k, mu for Bartz
