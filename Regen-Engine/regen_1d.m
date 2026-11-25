@@ -46,7 +46,7 @@ Y_str = sprintf('C2H5OH: %.8f, H2O: %.8f, O2:%.8f', Y_eth, Y_water, Y_o2);
 transport_chamber = c.get_Chamber_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 transport_throat = c.get_Throat_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 transport_exit = c.get_Exit_Transport(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
-i_stag = c.get_Enthalpies(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
+%i_stag = c.get_Enthalpies(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 vel_sonic = c.get_SonicVelocities(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
 
 cp_g_ref = [double(transport_chamber{1}), double(transport_throat{1}), double(transport_exit{1})] .* 4184; % J/kg*K
@@ -54,7 +54,7 @@ mu_g_ref = [double(transport_chamber{2}), double(transport_throat{2}), double(tr
 k_g_ref = [double(transport_chamber{3}), double(transport_throat{3}), double(transport_exit{3})] .* 0.4184; % W/m*K thermal conductivity
 prandtl_ref = [double(transport_chamber{4}), double(transport_throat{4}), double(transport_exit{4})];
 Param.cp_g = cp_g_ref(1); Param.mu_g = mu_g_ref(1); Param.k_g = k_g_ref(1); Param.prandtl = prandtl_ref(1);
-i_stag_ref = [double(i_stag{1}), double(i_stag{2}), double(i_stag{3})] .* 2326; % J/kg specific enthalpy
+%i_stag_ref = [double(i_stag{1}), double(i_stag{2}), double(i_stag{3})] .* 2326; % J/kg specific enthalpy
 vel_sonic_ref = [double(vel_sonic{1}), double(vel_sonic{2}), double(vel_sonic{3})] .* 0.3048; % m/s local speed of sound
 
 gamma_chamber = c.get_Chamber_MolWt_gamma(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
@@ -62,6 +62,10 @@ Gas.gamma = double(gamma_chamber{2}); % specific heat ratio, constant for isentr
 
 temps_cea = c.get_Temperatures(pyargs('Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio)); % Mat.r
 Gas.T_stag = double(temps_cea{1}) * 5/9 * cstar_eff^2; % K, Chamber (adiabatic Wall -> constant stagnation temp)
+
+Cantera.TPY = py.tuple({Gas.T_stag, Param.Pc, Y_str});
+Cantera.equilibrate('TP');
+i_stag_act = double(Cantera.enthalpy_mass); % J/kg (constant along an adiabatic nozzle)
 
 cstar_theo = double(c.get_Cstar(pyargs('Pc', Pc_us, 'MR', o_f))) * 0.3048; % m/s
 cf_cea = c.get_PambCf(pyargs('Pamb', Pamb, 'Pc', Pc_us, 'MR', o_f, 'eps', exp_ratio));
@@ -285,11 +289,12 @@ Gas.cp_g_local = interp1(Gas.M_ref, cp_g_ref, Gas.M_local, 'linear', 'extrap');
 Gas.mu_g_local = interp1(Gas.M_ref, mu_g_ref, Gas.M_local, 'linear', 'extrap');
 Gas.k_g_local = interp1(Gas.M_ref, k_g_ref, Gas.M_local, 'linear', 'extrap');
 Gas.prandtl_g_local = interp1(Gas.M_ref, prandtl_ref, Gas.M_local, 'linear', 'extrap');
-Gas.i_stag_local = interp1(Gas.M_ref, i_stag_ref, Gas.M_local, 'linear', 'extrap');
+%Gas.i_stag_local = interp1(Gas.M_ref, i_stag_ref, Gas.M_local, 'linear', 'extrap');
 
 Gas.Taw = Gas.T_stag * ((1 + Gas.prandtl_g_local.^(1/3).*((Gas.gamma - 1) / 2) .* Gas.M_local.^2) ...
     ./ (1 + ((Gas.gamma - 1) / 2) .* Gas.M_local.^2));
-Gas.i_aw = Gas.i_stag_local .* (1 + (Gas.prandtl_g_local.^(1/3) - 1) .* (Gas.velocity_local.^2 ./ 2) ./ Gas.i_stag_local);
+%Gas.i_aw = Gas.i_stag_local .* (1 + (Gas.prandtl_g_local.^(1/3) - 1) .* (Gas.velocity_local.^2 ./ 2) ./ Gas.i_stag_local);
+Gas.i_aw = i_stag_act .* (1 + (Gas.prandtl_g_local.^(1/3) - 1) .* (Gas.velocity_local.^2 ./ 2) ./ i_stag_act);
 
 Cool = load_coolprop('coolprop_tables.mat', 3, x_eth, x_h2o, mfrac_eth, mfrac_h2o);
 
