@@ -163,8 +163,7 @@ chf_event.direction = -1
 
 # Wall is chilled: stop integrating
 def chilled_event(time, state, sat, boiling_constants, *args):
-    chilled_tolerance = 5
-    return state[0] - (sat["T_sat"] + chilled_tolerance)
+    return state[0] - (sat["T_sat"] + WALL_DELTA_T)
 chilled_event.terminal = True
 chilled_event.direction = -1
 
